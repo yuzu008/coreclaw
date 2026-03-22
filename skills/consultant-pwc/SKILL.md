@@ -6,6 +6,7 @@ description: |
   TIMM (Total Impact Measurement & Management), Deal Value Creation,
   and Risk & Regulation frameworks.
   PwC-style integrated workflow combining strategy, technology, and business transformation.
+  Supports Deep Research MCP for enhanced web research capabilities.
 ---
 
 # Consultant PwC（PwC式コンサルティング）
@@ -90,3 +91,9 @@ Phase 5: 実行＆変革
 | 実行可能性 | 規制・リスクを踏まえた実行計画か |
 | ステークホルダー | 全ステークホルダーの視点を含むか |
 | Right to Win | その市場で勝つ権利（ケイパビリティ）があるか |
+
+## MCP連携
+
+`deep-research` MCP サーバーが有効な場合、Deep Research フェーズで MCP の構造化リサーチ
+フレームワークを活用してください。MCP が利用できない場合は従来の Think→Action→Report
+ワークフローを使用します。

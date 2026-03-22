@@ -7,12 +7,15 @@ CoreClaw is derived from [SciClaw](https://github.com/nahisaho/sciclaw) with SAT
 ## Features
 
 - **ChatGPT-like Web UI** — 2-pane SPA with experiment management, markdown rendering, and file uploads
-- **Agent Skills** — Local skill definitions in `skills/` directory, synced to agent containers
+- **Agent Skills** — 8 skill packages (consultant ×5, educator, scientist with 195 sub-skills, general-assistant)
 - **Docker Isolation** — Each agent task runs in its own container sandbox
 - **GitHub Copilot CLI** — Powered by `@github/copilot` for AI-driven code generation
 - **WebSocket Streaming** — Real-time response streaming
 - **GitHub Sync** — Push/pull experiment results to GitHub repositories
-- **MCP Support** — Connect to any MCP server for extended capabilities
+- **MCP Support** — Connect to any MCP server (ToolUniverse, Deep Research, custom servers)
+- **GitHub MCP Tools** — Optional GitHub MCP server integration (repos, issues, PRs)
+- **Skill Scanner** — Security scan for skills with whitelist support
+- **Self-Update** — Check/Update mechanism with automatic server restart
 
 ## Prerequisites
 
@@ -37,7 +40,43 @@ cp .env.example .env
 npm run dev
 ```
 
-Open http://localhost:3000 in your browser.
+Open http://localhost:3000 in your browser (port is configurable via `CORECLAW_WEB_PORT`).
+
+## Architecture
+
+```
+┌──────────────────────────────────────────────────────┐
+│  Browser (SPA)                                       │
+│  http://localhost:3000 (default)                      │
+└────────────┬─────────────────────────────────────────┘
+             │ HTTP/WS
+┌────────────▼─────────────────────────────────────────┐
+│  web-server.ts (API + WebSocket)                     │
+│  ├── Settings, Skills, Experiments, Scanner APIs     │
+│  ├── Check/Update (CoreClaw + Copilot CLI)           │
+│  └── GitHub Sync                                     │
+├──────────────────────────────────────────────────────┤
+│  container-runner.ts                                 │
+│  ├── Docker spawn + volume mounts                    │
+│  ├── Skills sync to container                        │
+│  ├── MCP config injection (--additional-mcp-config)  │
+│  └── GitHub MCP tools (--enable-all-github-mcp-tools)│
+├──────────────────────────────────────────────────────┤
+│  credential-proxy.ts (:3001)                         │
+│  └── GitHub token injection for container agents     │
+└────────────┬─────────────────────────────────────────┘
+             │ Docker
+┌────────────▼─────────────────────────────────────────┐
+│  coreclaw-agent:latest                               │
+│  ├── agent-runner (TypeScript)                       │
+│  │   └── copilot -p <prompt> --allow-all             │
+│  │       --additional-mcp-config @/tmp/mcp-config.json│
+│  ├── GitHub Copilot CLI (@github/copilot)            │
+│  ├── Python 3 + uv (for MCP servers like ToolUniverse)│
+│  ├── Chromium (for web automation)                   │
+│  └── CJK fonts (Japanese/Chinese/Korean support)     │
+└──────────────────────────────────────────────────────┘
+```
 
 ## Project Structure
 
@@ -48,7 +87,7 @@ coreclaw/
 │   ├── web-server.ts       # HTTP API + WebSocket server
 │   ├── experiments.ts      # Experiment CRUD + artifacts
 │   ├── db.ts               # SQLite database layer
-│   ├── container-runner.ts # Docker container spawn + streaming
+│   ├── container-runner.ts # Docker container spawn + MCP config
 │   ├── container-runtime.ts# Docker runtime abstraction
 │   ├── skills-sync.ts      # Local skills synchronization
 │   ├── ipc.ts              # Inter-process communication
@@ -59,18 +98,47 @@ coreclaw/
 │   ├── config.ts           # Environment config
 │   └── ...
 ├── container/              # Docker container files
-│   ├── Dockerfile          # Agent container (Copilot + Python + CJK)
+│   ├── Dockerfile          # Agent container (Copilot + Python + uv + CJK)
 │   ├── build.sh            # Build automation
 │   └── agent-runner/       # In-container Copilot CLI orchestrator
 ├── public/                 # Web frontend
-│   ├── index.html          # Main chat UI
+│   ├── index.html          # Main chat UI (single-file SPA)
 │   └── viewer.html         # Markdown/Mermaid viewer
-├── skills/                 # Agent Skills (local)
-│   └── {skill-name}/
-│       └── SKILL.md        # Skill definition with YAML frontmatter
+├── skills/                 # Agent Skills
+│   ├── consultant/         # General consulting (53 frameworks)
+│   ├── consultant-acn/     # Accenture-style consulting
+│   ├── consultant-bcg/     # BCG-style consulting
+│   ├── consultant-mck/     # McKinsey-style consulting
+│   ├── consultant-pwc/     # PwC-style consulting
+│   ├── educationalist/     # Teaching assistant (175 education theories)
+│   ├── general-assistant/  # General-purpose assistant
+│   └── scientist/          # Scientific assistant (195 sub-skills)
 ├── data/                   # Runtime data (git-ignored)
 └── groups/                 # Group workspaces (git-ignored)
 ```
+
+## MCP Servers
+
+CoreClaw supports external MCP servers via Settings > MCP Servers.
+Configured servers are injected into agent containers via `--additional-mcp-config`.
+
+### Preset MCP Servers
+
+| Server | Button | Description |
+|--------|--------|-------------|
+| **ToolUniverse** | `+ ToolUniverse` | 1000+ scientific tools (life science, chemistry, literature search) |
+| **Deep Research** | `+ Deep Research` | Structured research report generation |
+
+### GitHub MCP Tools
+
+Settings > Copilot > GitHub MCP Tools enables GitHub API access for agents:
+- **All Tools** — Full access to repos, issues, PRs, search
+- **Repos + Issues + PRs** — Common subset
+- Individual tool categories available
+
+### Custom MCP Servers
+
+Add any stdio or SSE-based MCP server with command, args, and environment variables.
 
 ## Adding Skills
 
@@ -101,6 +169,8 @@ Detailed instructions for the agent...
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `GITHUB_TOKEN` | *(required)* | GitHub token for Copilot CLI |
+| `CORECLAW_WEB_PORT` | `3000` | Web server port |
+| `CREDENTIAL_PROXY_PORT` | `3001` | Credential proxy port |
 | `ASSISTANT_NAME` | `Andy` | Bot trigger name |
 | `CONTAINER_IMAGE` | `coreclaw-agent:latest` | Docker image for agents |
 | `CONTAINER_TIMEOUT` | `1800000` | Agent timeout (ms) |

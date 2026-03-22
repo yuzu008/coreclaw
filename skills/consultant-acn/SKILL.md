@@ -5,6 +5,7 @@ description: |
   Features DX Strategy Framework, Digital Maturity Assessment, Zero-Based Budgeting (ZBB),
   Cost Excellence, Intelligent Operations, and Value Creation Framework.
   4-phase workflow: Purpose Discovery → Deep Research → Framework Analysis → Report Writing.
+  Supports Deep Research MCP for enhanced web research capabilities.
 ---
 
 # Consultant ACN（アクセンチュア式コンサルティング）
@@ -100,3 +101,9 @@ Phase 4: Report Writing（レポート生成）
 | 2→3 | 3件以上のソース、信頼度60%以上 |
 | 3→4 | 1件以上のフレームワーク適用、数値検証済 |
 | 4→完了 | レポート品質チェック通過 |
+
+## MCP連携
+
+`deep-research` MCP サーバーが有効な場合、Phase 2（Deep Research）で MCP の構造化リサーチ
+フレームワークを活用してください。MCP が利用できない場合は従来の Think→Action→Report
+ワークフローを使用します。

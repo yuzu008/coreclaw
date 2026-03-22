@@ -19,6 +19,7 @@ export interface Experiment {
   created_by: string;
   sync_repo: string; // per-experiment sync repository (owner/repo)
   skill: string; // default skill name for this chat
+  mcp_servers: string; // JSON array of enabled MCP server names (empty = all)
 }
 
 export interface ExperimentMessage {
@@ -84,6 +85,9 @@ export function initExperimentsDb(database: Database.Database): void {
   if (!expCols.find(c => c.name === 'skill')) {
     db.exec("ALTER TABLE experiments ADD COLUMN skill TEXT DEFAULT ''");
   }
+  if (!expCols.find(c => c.name === 'mcp_servers')) {
+    db.exec("ALTER TABLE experiments ADD COLUMN mcp_servers TEXT DEFAULT ''");
+  }
   const msgCols = db.prepare("PRAGMA table_info('experiment_messages')").all() as { name: string }[];
   if (!msgCols.find(c => c.name === 'user_id')) {
     db.exec("ALTER TABLE experiment_messages ADD COLUMN user_id TEXT DEFAULT ''");
@@ -102,7 +106,7 @@ function experimentDir(id: string): string {
   return path.join(experimentsDir(), id);
 }
 
-export function createExperiment(name: string, description = '', createdBy = '', syncRepo = '', skill = ''): Experiment {
+export function createExperiment(name: string, description = '', createdBy = '', syncRepo = '', skill = '', mcpServers = ''): Experiment {
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
   const exp: Experiment = {
@@ -115,14 +119,15 @@ export function createExperiment(name: string, description = '', createdBy = '',
     created_by: createdBy,
     sync_repo: syncRepo,
     skill,
+    mcp_servers: mcpServers,
   };
 
   getDb()
     .prepare(
-      `INSERT INTO experiments (id, name, description, status, created_at, updated_at, created_by, sync_repo, skill)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO experiments (id, name, description, status, created_at, updated_at, created_by, sync_repo, skill, mcp_servers)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
-    .run(exp.id, exp.name, exp.description, exp.status, exp.created_at, exp.updated_at, exp.created_by, exp.sync_repo, exp.skill);
+    .run(exp.id, exp.name, exp.description, exp.status, exp.created_at, exp.updated_at, exp.created_by, exp.sync_repo, exp.skill, exp.mcp_servers);
 
   // Create experiment artifacts directory
   const dir = experimentDir(id);
@@ -182,7 +187,7 @@ export function listExperiments(
 
 export function updateExperiment(
   id: string,
-  updates: Partial<Pick<Experiment, 'name' | 'description' | 'status' | 'sync_repo' | 'skill'>>,
+  updates: Partial<Pick<Experiment, 'name' | 'description' | 'status' | 'sync_repo' | 'skill' | 'mcp_servers'>>,
 ): Experiment | null {
   const exp = getExperiment(id);
   if (!exp) return null;
@@ -192,15 +197,16 @@ export function updateExperiment(
   const status = updates.status ?? exp.status;
   const sync_repo = updates.sync_repo ?? exp.sync_repo;
   const skill = updates.skill ?? exp.skill;
+  const mcp_servers = updates.mcp_servers ?? exp.mcp_servers;
   const updated_at = new Date().toISOString();
 
   getDb()
     .prepare(
-      'UPDATE experiments SET name = ?, description = ?, status = ?, sync_repo = ?, skill = ?, updated_at = ? WHERE id = ?',
+      'UPDATE experiments SET name = ?, description = ?, status = ?, sync_repo = ?, skill = ?, mcp_servers = ?, updated_at = ? WHERE id = ?',
     )
-    .run(name, description, status, sync_repo, skill, updated_at, id);
+    .run(name, description, status, sync_repo, skill, mcp_servers, updated_at, id);
 
-  return { ...exp, name, description, status, sync_repo, skill, updated_at };
+  return { ...exp, name, description, status, sync_repo, skill, mcp_servers, updated_at };
 }
 
 export function deleteExperiment(id: string): boolean {

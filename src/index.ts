@@ -496,6 +496,7 @@ async function main(): Promise<void> {
         }
       },
       exp?.skill || undefined,
+      exp?.mcp_servers ? (() => { try { return JSON.parse(exp.mcp_servers); } catch { return undefined; } })() : undefined,
     )
       .then((result) => {
         if (finished) return;

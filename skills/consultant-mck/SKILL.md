@@ -6,6 +6,7 @@ description: |
   Three Horizons, Granularity of Growth, OVA, Profit Pool Analysis, and SCP Analysis.
   McKinsey-style 5-phase workflow: Problem Definition → Hypothesis → Issue Decomposition →
   Data Collection/Analysis → Integration/Recommendation.
+  Supports Deep Research MCP for enhanced web research capabilities.
 ---
 
 # Consultant McK（マッキンゼー式コンサルティング）
@@ -91,3 +92,9 @@ Phase 5: 統合・提言
 | So What | 経営層への示唆が明確 |
 | 80/20 | 最も重要な20%の分析にフォーカス |
 | ピラミッド構造 | 結論→根拠の論理的階層 |
+
+## MCP連携
+
+`deep-research` MCP サーバーが有効な場合、Deep Research フェーズで MCP の構造化リサーチ
+フレームワークを活用してください。MCP が利用できない場合は従来の Think→Action→Report
+ワークフローを使用します。

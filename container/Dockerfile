@@ -34,6 +34,10 @@ RUN apt-get update && apt-get install -y \
     sqlite3 \
     && rm -rf /var/lib/apt/lists/*
 
+# Install uv (Python package manager for MCP servers like ToolUniverse)
+ENV UV_INSTALL_DIR=/usr/local/bin
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+
 # Rebuild font cache so all fonts are discoverable
 RUN fc-cache -fv
 

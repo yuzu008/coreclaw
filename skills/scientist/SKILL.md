@@ -28,6 +28,13 @@ Each sub-skill is automatically loaded and activated based on the user's request
 The SHIKIGAMI paradigm guides complex research tasks through iterative cycles
 of thinking, reporting, and acting.
 
+## MCP連携
+
+`deep-research` MCP サーバーが有効な場合、文献調査・先行研究調査・トピックの網羅的調査時に
+MCP の `deep-research` プロンプトテンプレートを活用してください。
+MCP が提供する構造化リサーチ（課題精緻化→サブ質問分解→Web検索→ソース評価→レポート生成）を
+科学研究のエビデンス階層評価と組み合わせて使用してください。
+
 ## Education Theory Database
 
 Shared with `teaching-assistant`. Data is stored at `skills/teaching-assistant/data/`:

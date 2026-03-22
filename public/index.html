@@ -495,6 +495,18 @@ html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Sego
 .mcp-add-row .btn-add-mcp { flex: 1; }
 .btn-preset { border-style: solid; border-color: var(--green); color: var(--green); }
 .btn-preset:hover { border-color: var(--green); color: var(--green); background: var(--bg-hover); }
+.mcp-checkbox-list {
+  display: flex; flex-wrap: wrap; gap: 6px; padding: 8px;
+  background: var(--bg-tertiary); border-radius: var(--radius); border: 1px solid var(--border);
+  min-height: 32px; align-items: center;
+}
+.mcp-checkbox-list label {
+  display: flex; align-items: center; gap: 4px; font-size: 13px;
+  color: var(--text-secondary); cursor: pointer; padding: 2px 8px;
+  border-radius: 4px; background: var(--bg-secondary); border: 1px solid var(--border);
+}
+.mcp-checkbox-list label:hover { border-color: var(--accent); }
+.mcp-checkbox-list input[type="checkbox"] { margin: 0; }
 
 /* Component update list */
 .component-list { display: flex; flex-direction: column; gap: 6px; }
@@ -950,6 +962,8 @@ html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Sego
     <textarea id="expDescInput" rows="3" placeholder="Brief description of the experiment..."></textarea>
     <label for="expSyncRepoInput">Sync Repository (optional)</label>
     <input type="text" id="expSyncRepoInput" placeholder="owner/repo-name">
+    <label>MCP Servers</label>
+    <div id="expMcpCheckboxes" class="mcp-checkbox-list"><span style="color:var(--text-secondary);font-size:13px">Loading...</span></div>
     <div class="modal-actions">
       <button class="btn-cancel" onclick="closeModal('newExpModal')">Cancel</button>
       <button class="btn-primary" onclick="createExperiment()">Create</button>
@@ -971,6 +985,8 @@ html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Sego
     <textarea id="editDescInput" rows="3" placeholder="Chat description..."></textarea>
     <label for="editSyncRepoInput">Sync Repository</label>
     <input type="text" id="editSyncRepoInput" placeholder="owner/repo-name">
+    <label>MCP Servers</label>
+    <div id="editMcpCheckboxes" class="mcp-checkbox-list"><span style="color:var(--text-secondary);font-size:13px">Loading...</span></div>
     <div class="modal-actions">
       <button class="btn-cancel" onclick="closeModal('renameExpModal')">Cancel</button>
       <button class="btn-primary" onclick="submitRename()">Save</button>
@@ -1052,6 +1068,18 @@ html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Sego
               <option value="gemini-3-pro-preview">Gemini 3 Pro</option>
             </select>
             <div class="field-hint">Model used by Copilot CLI (copilot --model)</div>
+          </div>
+          <div class="settings-field">
+            <label><span class="field-icon">🔧</span> GitHub MCP Tools</label>
+            <select id="settingsGithubMcpTools">
+              <option value="">Disabled</option>
+              <option value="all">All Tools</option>
+              <option value="repos,issues,pull_requests">Repos + Issues + PRs</option>
+              <option value="repos">Repos only</option>
+              <option value="issues">Issues only</option>
+              <option value="pull_requests">Pull Requests only</option>
+            </select>
+            <div class="field-hint">GitHub MCP server tools available to Copilot agent (search, issues, PRs)</div>
           </div>
         </div>
       </div>
@@ -1150,6 +1178,8 @@ html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Sego
           <div id="mcpServerList"></div>
           <div class="mcp-add-row">
             <button class="btn-add-mcp" onclick="addMcpServerRow()">+ Add MCP Server</button>
+            <button class="btn-add-mcp" onclick="addToolUniverse()" style="margin-left:8px" title="Add ToolUniverse (1000+ scientific tools)">+ ToolUniverse</button>
+            <button class="btn-add-mcp" onclick="addDeepResearch()" style="margin-left:8px" title="Add Deep Research (comprehensive research reports)">+ Deep Research</button>
           </div>
         </div>
       </div>
@@ -1413,6 +1443,7 @@ function showNewExperimentModal() {
   document.getElementById('expDescInput').value = '';
   document.getElementById('expSyncRepoInput').value = '';
   populateSkillSelect();
+  populateMcpCheckboxes('expMcpCheckboxes', []);
   document.getElementById('newExpModal').classList.add('visible');
   document.getElementById('expNameInput').focus();
 }
@@ -1426,9 +1457,10 @@ async function createExperiment() {
   const description = document.getElementById('expDescInput').value.trim();
   const sync_repo = document.getElementById('expSyncRepoInput').value.trim();
   const skill = document.getElementById('expSkillSelect').value;
+  const mcp_servers = getSelectedMcpServers('expMcpCheckboxes');
   const exp = await api('/experiments', {
     method: 'POST',
-    body: JSON.stringify({ name, description, sync_repo, skill }),
+    body: JSON.stringify({ name, description, sync_repo, skill, mcp_servers }),
   });
   closeModal('newExpModal');
   await loadExperiments();
@@ -1444,6 +1476,7 @@ async function renameExperiment() {
   document.getElementById('editSyncRepoInput').value = exp.sync_repo || '';
   // Populate skill select
   await populateEditSkillSelect(exp.skill || '');
+  populateMcpCheckboxes('editMcpCheckboxes', exp.mcp_servers ? (() => { try { return JSON.parse(exp.mcp_servers); } catch { return []; } })() : []);
   document.getElementById('renameExpModal').classList.add('visible');
   const input = document.getElementById('renameInput');
   input.focus();
@@ -1466,9 +1499,10 @@ async function submitRename() {
   const newDesc = document.getElementById('editDescInput').value.trim();
   const newSyncRepo = document.getElementById('editSyncRepoInput').value.trim();
   const newSkill = document.getElementById('editSkillSelect').value;
+  const newMcpServers = getSelectedMcpServers('editMcpCheckboxes');
   await api(`/experiments/${currentExpId}`, {
     method: 'PATCH',
-    body: JSON.stringify({ name: newName, description: newDesc, sync_repo: newSyncRepo, skill: newSkill }),
+    body: JSON.stringify({ name: newName, description: newDesc, sync_repo: newSyncRepo, skill: newSkill, mcp_servers: newMcpServers }),
   });
   const exp = experiments.find(e => e.id === currentExpId);
   if (exp) exp.skill = newSkill;
@@ -2632,7 +2666,58 @@ function updateMcpField(el) {
 }
 
 function addToolUniverse() {
-  // Removed — ToolUniverse is not available in CoreClaw
+  addMcpServerRow({
+    name: 'ToolUniverse',
+    type: 'stdio',
+    command: 'uvx',
+    args: 'tooluniverse-smcp-stdio --compact-mode',
+    env: ''
+  });
+}
+
+function addDeepResearch() {
+  addMcpServerRow({
+    name: 'deep-research',
+    type: 'stdio',
+    command: 'uvx',
+    args: 'mcp-server-deep-research',
+    env: ''
+  });
+}
+
+// ===== Per-Chat MCP Selection =====
+async function populateMcpCheckboxes(containerId, selectedNames) {
+  const container = document.getElementById(containerId);
+  // Load global MCP servers from settings
+  let servers = [];
+  try {
+    const settings = await api('/settings');
+    if (settings.mcp_servers) {
+      const list = typeof settings.mcp_servers === 'string' ? JSON.parse(settings.mcp_servers) : settings.mcp_servers;
+      servers = list.filter(s => s.name && s.command);
+    }
+  } catch { /* ignore */ }
+
+  if (servers.length === 0) {
+    container.innerHTML = '<span style="color:var(--text-muted);font-size:12px">Settings で MCP サーバーを設定してください</span>';
+    return;
+  }
+
+  // If no selection yet (new chat), default to all checked
+  const allSelected = !selectedNames || selectedNames.length === 0;
+  container.innerHTML = servers.map(s => {
+    const checked = allSelected || selectedNames.includes(s.name) ? 'checked' : '';
+    return `<label><input type="checkbox" value="${esc(s.name)}" ${checked}>${esc(s.name)}</label>`;
+  }).join('');
+}
+
+function getSelectedMcpServers(containerId) {
+  const checkboxes = document.querySelectorAll(`#${containerId} input[type="checkbox"]`);
+  if (checkboxes.length === 0) return '';
+  const allChecked = [...checkboxes].every(cb => cb.checked);
+  if (allChecked) return ''; // all selected = no filter (use all)
+  const selected = [...checkboxes].filter(cb => cb.checked).map(cb => cb.value);
+  return JSON.stringify(selected);
 }
 
 // ===== Component Updates =====
@@ -2734,6 +2819,7 @@ async function showSettings() {
     const settings = await api('/settings');
     document.getElementById('settingsGithubToken').value = settings.github_token || '';
     document.getElementById('settingsCopilotModel').value = settings.copilot_model || '';
+    document.getElementById('settingsGithubMcpTools').value = settings.github_mcp_tools || '';
     document.getElementById('settingsOpenaiKey').value = settings.openai_api_key || '';
     document.getElementById('settingsAzureKey').value = settings.azure_openai_api_key || '';
     document.getElementById('settingsAzureEndpoint').value = settings.azure_openai_endpoint || '';
@@ -2759,6 +2845,7 @@ async function saveSettings() {
   const settings = {
     github_token: document.getElementById('settingsGithubToken').value.trim(),
     copilot_model: document.getElementById('settingsCopilotModel').value,
+    github_mcp_tools: document.getElementById('settingsGithubMcpTools').value,
     ai_provider: provider,
     openai_api_key: document.getElementById('settingsOpenaiKey').value.trim(),
     azure_openai_api_key: document.getElementById('settingsAzureKey').value.trim(),
@@ -2773,9 +2860,7 @@ async function saveSettings() {
     method: 'PUT',
     body: JSON.stringify(settings),
   });
-  const saved = document.getElementById('settingsSaved');
-  saved.classList.add('visible');
-  setTimeout(() => saved.classList.remove('visible'), 2000);
+  closeModal('settingsModal');
 }
 
 // ===== Init =====

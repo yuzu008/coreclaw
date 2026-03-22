@@ -196,6 +196,7 @@ function buildVolumeMounts(
 function buildContainerArgs(
   mounts: VolumeMount[],
   containerName: string,
+  mcpFilter?: string[],
 ): string[] {
   const args: string[] = ['run', '-i', '--rm', '--name', containerName];
 
@@ -231,6 +232,51 @@ function buildContainerArgs(
   if (copilotModel) {
     args.push('-e', `COPILOT_MODEL=${copilotModel}`);
   }
+
+  // Pass GitHub MCP tools setting
+  try {
+    const settingsPath = path.join(DATA_DIR, 'settings.json');
+    if (fs.existsSync(settingsPath)) {
+      const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
+      const mcpTools = settings.github_mcp_tools || '';
+      if (mcpTools) {
+        args.push('-e', `COPILOT_GITHUB_MCP_TOOLS=${mcpTools}`);
+      }
+      // Pass custom MCP servers config to container
+      let mcpList: Array<{name: string; type: string; command: string; args?: string; env?: string}> = [];
+      if (settings.mcp_servers) {
+        try {
+          mcpList = typeof settings.mcp_servers === 'string'
+            ? JSON.parse(settings.mcp_servers)
+            : settings.mcp_servers;
+        } catch { /* ignore parse errors */ }
+      }
+      const validMcp = mcpList.filter((s: {name: string; command: string}) => s.name && s.command);
+      // Apply per-chat MCP filter (if set, only include servers in the filter list)
+      const filteredMcp = mcpFilter ? validMcp.filter(s => mcpFilter.includes(s.name)) : validMcp;
+      if (filteredMcp.length > 0) {
+        // Convert to Copilot CLI --additional-mcp-config format
+        const mcpConfig: Record<string, Record<string, unknown>> = {};
+        for (const s of filteredMcp) {
+          if (s.type === 'stdio') {
+            const sArgs = s.args ? s.args.split(/\s+/).filter(Boolean) : [];
+            const envObj: Record<string, string> = {};
+            if (s.env) {
+              for (const pair of s.env.split(',').map((p: string) => p.trim()).filter(Boolean)) {
+                const eq = pair.indexOf('=');
+                if (eq > 0) envObj[pair.slice(0, eq)] = pair.slice(eq + 1);
+              }
+            }
+            mcpConfig[s.name] = { command: s.command, args: sArgs, ...(Object.keys(envObj).length > 0 ? { env: envObj } : {}) };
+          } else {
+            mcpConfig[s.name] = { url: s.command, type: s.type };
+          }
+        }
+        const mcpJson = JSON.stringify({ mcpServers: mcpConfig });
+        args.push('-e', `COPILOT_MCP_CONFIG=${mcpJson}`);
+      }
+    }
+  } catch { /* ignore */ }
 
   // Route API traffic through credential proxy (fallback)
   args.push(
@@ -268,6 +314,7 @@ export async function runContainerAgent(
   onProcess: (proc: ChildProcess, containerName: string) => void,
   onOutput?: (output: ContainerOutput) => Promise<void>,
   skillFilter?: string,
+  mcpFilter?: string[],
 ): Promise<ContainerOutput> {
   const startTime = Date.now();
 
@@ -277,7 +324,7 @@ export async function runContainerAgent(
   const mounts = buildVolumeMounts(group, input.isMain, skillFilter);
   const safeName = group.folder.replace(/[^a-zA-Z0-9-]/g, '-');
   const containerName = `coreclaw-${safeName}-${Date.now()}`;
-  const containerArgs = buildContainerArgs(mounts, containerName);
+  const containerArgs = buildContainerArgs(mounts, containerName, mcpFilter);
 
   logger.info(
     {

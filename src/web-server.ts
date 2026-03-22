@@ -43,6 +43,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SETTINGS_KEYS = [
   'github_token',
   'copilot_model',
+  'github_mcp_tools',
   'ai_provider',
   'openai_api_key',
   'azure_openai_api_key',
@@ -436,7 +437,7 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
   if (method === 'POST' && pathname === '/api/experiments') {
     const body = JSON.parse(await readBody(req));
     const settings = loadSettings();
-    const exp = createExperiment(body.name || 'Untitled Experiment', body.description, settings.github_username || '', body.sync_repo || '', body.skill || '');
+    const exp = createExperiment(body.name || 'Untitled Experiment', body.description, settings.github_username || '', body.sync_repo || '', body.skill || '', body.mcp_servers || '');
     sendJson(res, 201, exp);
     return;
   }
@@ -1211,16 +1212,18 @@ function handleWsMessage(ws: WebSocket, raw: string): void {
 // Component version management
 // ---------------------------------------------------------------------------
 
+// Capture the running version at startup (won't change until process restarts)
+const RUNNING_VERSION = (() => {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(process.cwd(), 'package.json'), 'utf-8')).version || 'unknown';
+  } catch { return 'unknown'; }
+})();
+
 function getComponentVersions(): Record<string, { version: string; description: string }> {
   const versions: Record<string, { version: string; description: string }> = {};
 
-  // CoreClaw
-  try {
-    const pkg = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'package.json'), 'utf-8'));
-    versions.coreclaw = { version: pkg.version || 'unknown', description: 'CoreClaw' };
-  } catch {
-    versions.coreclaw = { version: 'unknown', description: 'CoreClaw' };
-  }
+  // CoreClaw (show running version)
+  versions.coreclaw = { version: RUNNING_VERSION, description: 'CoreClaw' };
 
   // GitHub Copilot CLI
   try {
@@ -1243,21 +1246,27 @@ async function checkComponentUpdate(component: string): Promise<{ available: boo
         try {
           execSync('git fetch origin main 2>&1', { cwd: projectRoot, encoding: 'utf-8', timeout: 30000, env: { ...process.env, ...gitEnv } });
         } catch {
-          return { available: false, current: 'unknown', message: 'Failed to fetch from remote.' };
+          return { available: false, current: RUNNING_VERSION, message: 'Failed to fetch from remote.' };
         }
         const local = execSync('git rev-parse HEAD', { cwd: projectRoot, encoding: 'utf-8', timeout: 5000 }).trim();
         const remote = execSync('git rev-parse origin/main', { cwd: projectRoot, encoding: 'utf-8', timeout: 5000 }).trim();
-        const pkg = JSON.parse(fs.readFileSync(path.join(projectRoot, 'package.json'), 'utf-8'));
-        if (local === remote) {
-          return { available: false, current: pkg.version, message: 'Up to date' };
+        const diskPkg = JSON.parse(fs.readFileSync(path.join(projectRoot, 'package.json'), 'utf-8'));
+
+        // Check if code on disk is newer than running process (needs restart)
+        if (diskPkg.version !== RUNNING_VERSION) {
+          return { available: true, current: RUNNING_VERSION, latest: diskPkg.version, message: `v${diskPkg.version} ready (restart needed)` };
         }
-        // Try to get remote package.json version
+
+        if (local === remote) {
+          return { available: false, current: RUNNING_VERSION, message: 'Up to date' };
+        }
+        // Remote has new commits
         let remoteVer = '';
         try {
           remoteVer = execSync('git show origin/main:package.json 2>/dev/null', { cwd: projectRoot, encoding: 'utf-8', timeout: 5000 });
           remoteVer = JSON.parse(remoteVer).version || '';
         } catch { remoteVer = ''; }
-        return { available: true, current: pkg.version, latest: remoteVer || undefined, message: remoteVer ? `v${remoteVer} available` : 'Update available' };
+        return { available: true, current: RUNNING_VERSION, latest: remoteVer || undefined, message: remoteVer ? `v${remoteVer} available` : 'Update available' };
       }
       case 'copilot': {
         const out = execSync('copilot update --check 2>&1 || copilot --version 2>&1', { encoding: 'utf-8', timeout: 30000 }).trim();
@@ -1298,9 +1307,19 @@ async function updateComponent(component: string): Promise<{ ok: boolean; messag
         }
         const local = execSync('git rev-parse HEAD', { cwd: projectRoot, encoding: 'utf-8', timeout: 5000 }).trim();
         const remote = execSync('git rev-parse origin/main', { cwd: projectRoot, encoding: 'utf-8', timeout: 5000 }).trim();
+        const diskPkg = JSON.parse(fs.readFileSync(path.join(projectRoot, 'package.json'), 'utf-8'));
+
+        // Code already up to date but server needs restart
+        if (local === remote && diskPkg.version !== RUNNING_VERSION) {
+          setTimeout(() => {
+            logger.info('Restarting server to apply pending update...');
+            process.exit(0);
+          }, 1500);
+          return { ok: true, message: `Restarting to apply v${diskPkg.version}...`, version: diskPkg.version, restart: true };
+        }
+
         if (local === remote) {
-          const pkg = JSON.parse(fs.readFileSync(path.join(projectRoot, 'package.json'), 'utf-8'));
-          return { ok: true, message: `CoreClaw v${pkg.version} is already up to date`, version: pkg.version };
+          return { ok: true, message: `CoreClaw v${RUNNING_VERSION} is already up to date`, version: RUNNING_VERSION };
         }
         execSync('git pull origin main 2>&1', { cwd: projectRoot, encoding: 'utf-8', timeout: 60000, env: { ...process.env, ...gitEnv } });
         execSync('npm install 2>&1', { cwd: projectRoot, encoding: 'utf-8', timeout: 120000 });

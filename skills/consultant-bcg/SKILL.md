@@ -5,6 +5,7 @@ description: |
   Features Growth-Share Matrix, Experience Curve, Strategy Palette, Hypothesis-Driven Approach,
   TSR Analysis, Advantage Matrix, and Bionic Company Framework.
   4-phase workflow: Purpose Discovery → Deep Research → Framework Analysis → Report Writing.
+  Supports Deep Research MCP for enhanced web research capabilities.
 ---
 
 # Consultant BCG（BCG式コンサルティング）
@@ -120,3 +121,9 @@ Phase 4: Report Writing（レポート生成）
 | 仮説検証 | Day 1 Answerとの整合性 |
 | ファクトベース | データに基づく定量分析 |
 | So What | 経営層への示唆が明確 |
+
+## MCP連携
+
+`deep-research` MCP サーバーが有効な場合、Deep Research フェーズで MCP の構造化リサーチ
+フレームワークを活用してください。MCP が利用できない場合は従来の Think→Action→Report
+ワークフローを使用します。

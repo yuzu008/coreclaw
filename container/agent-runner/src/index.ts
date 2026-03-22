@@ -141,6 +141,30 @@ async function runCopilotQuery(
       '--allow-all',
     ];
 
+    // Enable GitHub MCP tools if configured
+    const mcpTools = process.env.COPILOT_GITHUB_MCP_TOOLS;
+    if (mcpTools === 'all') {
+      args.push('--enable-all-github-mcp-tools');
+    } else if (mcpTools) {
+      for (const toolset of mcpTools.split(',').map(s => s.trim()).filter(Boolean)) {
+        args.push('--add-github-mcp-toolset', toolset);
+      }
+    }
+
+    // Pass custom MCP servers config if set
+    const mcpConfig = process.env.COPILOT_MCP_CONFIG;
+    if (mcpConfig) {
+      try {
+        JSON.parse(mcpConfig); // validate JSON
+        const configPath = '/tmp/mcp-config.json';
+        fs.writeFileSync(configPath, mcpConfig, 'utf-8');
+        args.push('--additional-mcp-config', `@${configPath}`);
+        log(`MCP config loaded (${mcpConfig.length} bytes)`);
+      } catch (e) {
+        log(`WARNING: Invalid MCP config JSON: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    }
+
     // Use model from environment if set
     const model = process.env.COPILOT_MODEL;
     if (model) {
