@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CoreClaw Viewer</title>
+<script src="https://cdn.jsdelivr.net/npm/marked@15/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<style>
+:root {
+  --bg: #0d1117; --bg2: #161b22; --border: #30363d;
+  --text: #e6edf3; --text2: #8b949e; --accent: #58a6ff; --green: #3fb950;
+  --font-mono: 'SF Mono','Fira Code','Cascadia Code',monospace;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; background: var(--bg); color: var(--text); font-family: -apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif; }
+
+/* Header */
+.viewer-header {
+  position: sticky; top: 0; z-index: 10;
+  background: var(--bg2); border-bottom: 1px solid var(--border);
+  padding: 10px 24px; display: flex; align-items: center; gap: 12px;
+}
+.viewer-header .filename { font-size: 14px; font-weight: 600; flex: 1; font-family: var(--font-mono); }
+.viewer-header .badge { font-size: 11px; padding: 3px 8px; border-radius: 12px; background: var(--border); color: var(--text2); text-transform: uppercase; }
+.viewer-header .badge.md { background: #1f6feb33; color: var(--accent); }
+.viewer-header .badge.mermaid { background: #3fb95033; color: var(--green); }
+.btn-dl {
+  background: var(--border); border: none; color: var(--text2); padding: 6px 14px;
+  border-radius: 6px; cursor: pointer; font-size: 12px; transition: all .15s;
+}
+.btn-dl:hover { background: #30363dcc; color: var(--text); }
+.btn-raw {
+  background: none; border: 1px solid var(--border); color: var(--text2); padding: 6px 14px;
+  border-radius: 6px; cursor: pointer; font-size: 12px; transition: all .15s;
+}
+.btn-raw:hover { border-color: var(--text2); color: var(--text); }
+
+/* Content area */
+.content { max-width: 900px; margin: 0 auto; padding: 32px 24px; line-height: 1.7; font-size: 15px; }
+
+/* Markdown styles */
+.content h1 { font-size: 2em; margin: 24px 0 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+.content h2 { font-size: 1.5em; margin: 20px 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+.content h3 { font-size: 1.25em; margin: 16px 0 8px; }
+.content h4 { font-size: 1.1em; margin: 12px 0 6px; }
+.content p { margin: 8px 0; }
+.content ul, .content ol { margin: 8px 0; padding-left: 28px; }
+.content li { margin: 4px 0; }
+.content blockquote {
+  border-left: 3px solid var(--accent); padding: 8px 16px; margin: 12px 0;
+  color: var(--text2); background: var(--bg2); border-radius: 0 6px 6px 0;
+}
+.content pre {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 8px; padding: 16px; margin: 12px 0; overflow-x: auto;
+  font-family: var(--font-mono); font-size: 13px;
+}
+.content code { font-family: var(--font-mono); font-size: 13px; background: var(--bg2); padding: 2px 6px; border-radius: 4px; }
+.content pre code { background: none; padding: 0; }
+.content table { border-collapse: collapse; margin: 12px 0; width: 100%; }
+.content th, .content td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; }
+.content th { background: var(--bg2); font-weight: 600; }
+.content tr:nth-child(even) { background: var(--bg2); }
+.content hr { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
+.content a { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+.content a:hover { color: #79c0ff; }
+.content img { max-width: 100%; border-radius: 8px; margin: 12px 0; }
+.content strong { color: var(--text); }
+
+/* Mermaid */
+.mermaid-container { display: flex; justify-content: center; padding: 40px 24px; }
+.mermaid-container svg { max-width: 100%; height: auto; }
+
+/* Loading */
+.loading { text-align: center; padding: 60px; color: var(--text2); font-size: 14px; }
+
+/* Raw view */
+.raw-view { display: none; }
+.raw-view.active { display: block; }
+.raw-view pre {
+  background: var(--bg2); border: 1px solid var(--border); border-radius: 8px;
+  padding: 20px; margin: 20px auto; max-width: 900px;
+  font-family: var(--font-mono); font-size: 13px; white-space: pre-wrap;
+  word-break: break-word; overflow-x: auto;
+}
+.rendered-view.hidden { display: none; }
+</style>
+</head>
+<body>
+
+<div class="viewer-header">
+  <span class="filename" id="filename">Loading...</span>
+  <span class="badge" id="badge"></span>
+  <button class="btn-raw" id="toggleRaw" onclick="toggleRaw()">Raw</button>
+  <button class="btn-dl" id="dlBtn" onclick="downloadFile()">⬇ Download</button>
+</div>
+
+<div class="rendered-view" id="renderedView">
+  <div class="loading" id="loading">Loading...</div>
+  <div class="content" id="mdContent" style="display:none"></div>
+  <div class="mermaid-container" id="mermaidContent" style="display:none"></div>
+</div>
+
+<div class="raw-view" id="rawView">
+  <pre id="rawContent"></pre>
+</div>
+
+<script>
+mermaid.initialize({
+  startOnLoad: false,
+  theme: 'dark',
+  themeVariables: {
+    primaryColor: '#1f6feb',
+    primaryTextColor: '#e6edf3',
+    primaryBorderColor: '#30363d',
+    lineColor: '#8b949e',
+    secondaryColor: '#161b22',
+    tertiaryColor: '#21262d',
+  },
+});
+
+marked.setOptions({ breaks: true, gfm: true });
+
+const params = new URLSearchParams(location.search);
+const fileUrl = params.get('url');
+const fileName = params.get('name') || fileUrl?.split('/').pop() || 'file';
+const ext = fileName.split('.').pop()?.toLowerCase() || '';
+
+let rawText = '';
+let showingRaw = false;
+
+document.getElementById('filename').textContent = fileName;
+document.title = `${fileName} — CoreClaw Viewer`;
+
+const badge = document.getElementById('badge');
+if (ext === 'md') { badge.textContent = 'Markdown'; badge.classList.add('md'); }
+else if (ext === 'mmd' || ext === 'mermaid') { badge.textContent = 'Mermaid'; badge.classList.add('mermaid'); }
+else { badge.textContent = ext.toUpperCase(); }
+
+async function loadFile() {
+  if (!fileUrl) {
+    document.getElementById('loading').textContent = 'Error: No file URL provided';
+    return;
+  }
+
+  try {
+    const res = await fetch(fileUrl);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    rawText = await res.text();
+    document.getElementById('rawContent').textContent = rawText;
+    document.getElementById('loading').style.display = 'none';
+
+    if (ext === 'md') {
+      renderMarkdown(rawText);
+    } else if (ext === 'mmd' || ext === 'mermaid') {
+      await renderMermaid(rawText);
+    } else {
+      // Unknown type — show as raw
+      toggleRaw();
+    }
+  } catch (err) {
+    document.getElementById('loading').textContent = `Error loading file: ${err.message}`;
+  }
+}
+
+function renderMarkdown(text) {
+  const el = document.getElementById('mdContent');
+  el.innerHTML = marked.parse(text);
+  el.style.display = '';
+}
+
+async function renderMermaid(text) {
+  const el = document.getElementById('mermaidContent');
+  try {
+    const { svg } = await mermaid.render('mermaid-diagram', text);
+    el.innerHTML = svg;
+    el.style.display = '';
+  } catch (err) {
+    el.innerHTML = `<div class="loading">Mermaid render error: ${err.message}<br><br>Showing raw source:</div>`;
+    el.style.display = '';
+    toggleRaw();
+  }
+}
+
+function toggleRaw() {
+  showingRaw = !showingRaw;
+  document.getElementById('rawView').classList.toggle('active', showingRaw);
+  document.getElementById('renderedView').classList.toggle('hidden', showingRaw);
+  document.getElementById('toggleRaw').textContent = showingRaw ? 'Rendered' : 'Raw';
+}
+
+function downloadFile() {
+  const a = document.createElement('a');
+  a.href = fileUrl;
+  a.download = fileName;
+  a.click();
+}
+
+loadFile();
+</script>
+</body>
+</html>
