@@ -1282,7 +1282,7 @@ async function checkComponentUpdate(component: string): Promise<{ available: boo
   }
 }
 
-async function updateComponent(component: string): Promise<{ ok: boolean; message: string; version?: string }> {
+async function updateComponent(component: string): Promise<{ ok: boolean; message: string; version?: string; restart?: boolean }> {
   const projectRoot = process.cwd();
 
   try {
@@ -1304,8 +1304,30 @@ async function updateComponent(component: string): Promise<{ ok: boolean; messag
         }
         execSync('git pull origin main 2>&1', { cwd: projectRoot, encoding: 'utf-8', timeout: 60000, env: { ...process.env, ...gitEnv } });
         execSync('npm install 2>&1', { cwd: projectRoot, encoding: 'utf-8', timeout: 120000 });
+
+        // Check if container/ files changed and rebuild Docker image if needed
+        let containerRebuilt = false;
+        try {
+          const diff = execSync(`git diff --name-only ${local} HEAD -- container/`, { cwd: projectRoot, encoding: 'utf-8', timeout: 5000 }).trim();
+          if (diff) {
+            logger.info({ files: diff.split('\n').length }, 'Container files changed — rebuilding Docker image...');
+            execSync(`docker build --build-arg BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ) -t coreclaw-agent:latest ${path.join(projectRoot, 'container')} 2>&1`, {
+              encoding: 'utf-8', timeout: 300000,
+            });
+            containerRebuilt = true;
+          }
+        } catch (dockerErr) {
+          logger.warn({ err: dockerErr }, 'Docker image rebuild failed (non-fatal)');
+        }
+
         const pkg = JSON.parse(fs.readFileSync(path.join(projectRoot, 'package.json'), 'utf-8'));
-        return { ok: true, message: `CoreClaw updated to v${pkg.version}. Please restart the server.`, version: pkg.version };
+        const rebuildMsg = containerRebuilt ? ' Container image rebuilt.' : '';
+        // Schedule server restart after response is sent
+        setTimeout(() => {
+          logger.info('Restarting server after CoreClaw update...');
+          process.exit(0);
+        }, 1500);
+        return { ok: true, message: `CoreClaw updated to v${pkg.version}.${rebuildMsg} Restarting server...`, version: pkg.version, restart: true };
       }
 
       case 'copilot': {

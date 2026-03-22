@@ -2700,8 +2700,17 @@ async function updateComponent(component) {
     if (result.ok) {
       btn.textContent = '✅ ' + (result.version || 'Done');
       btn.classList.add('success');
-      // Reload versions after a delay
-      setTimeout(() => loadComponentVersions(), 2000);
+      if (result.restart) {
+        btn.textContent = '✅ Restarting...';
+        let sec = 5;
+        const timer = setInterval(() => {
+          sec--;
+          btn.textContent = '⏳ Reloading in ' + sec + 's...';
+          if (sec <= 0) { clearInterval(timer); location.reload(); }
+        }, 1000);
+      } else {
+        setTimeout(() => loadComponentVersions(), 2000);
+      }
     } else {
       btn.textContent = '❌ Failed';
       btn.classList.add('error');
