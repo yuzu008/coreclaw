@@ -6,7 +6,7 @@ test.describe('Scientific Assistant Skill', () => {
     await expect(page.locator('.welcome h2')).toHaveText('🐾 CoreClaw');
 
     // Open New Chat modal
-    await page.getByRole('button', { name: 'New Chat' }).click();
+    await page.getByRole('button', { name: 'New Chat Group' }).click();
     await expect(page.locator('#newExpModal')).toHaveClass(/visible/);
 
     // Fill chat name
@@ -82,7 +82,7 @@ test.describe('Scientific Assistant Skill', () => {
     await page.goto('/');
 
     // Create chat with scientific-assistant
-    await page.getByRole('button', { name: 'New Chat' }).click();
+    await page.getByRole('button', { name: 'New Chat Group' }).click();
     await page.fill('#expNameInput', 'Persist Skill Test');
 
     await page.waitForFunction(() => {
