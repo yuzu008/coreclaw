@@ -130,12 +130,17 @@ function parseMultipart(body: Buffer, boundary: string): MultipartFile[] {
     // Trim trailing \r\n
     const trimmed = data.subarray(0, data.length - 2);
 
-    const filenameMatch = headers.match(/filename="([^"]+)"/);
+    // Try RFC 5987 filename*=UTF-8''... first, fall back to filename="..."
+    const filenameStar = headers.match(/filename\*=UTF-8''([^\s;]+)/i);
+    const filenameQuoted = headers.match(/filename="([^"]+)"/);
+    const filename = filenameStar
+      ? decodeURIComponent(filenameStar[1])
+      : filenameQuoted?.[1];
     const ctMatch = headers.match(/Content-Type:\s*(.+)/i);
 
-    if (filenameMatch) {
+    if (filename) {
       files.push({
-        filename: filenameMatch[1],
+        filename,
         contentType: ctMatch ? ctMatch[1].trim() : 'application/octet-stream',
         data: trimmed,
       });
