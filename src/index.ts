@@ -495,7 +495,7 @@ async function main(): Promise<void> {
           closeContainer(groupFolder);
         }
       },
-      exp?.skill || undefined,
+      exp?.skill || undefined,  // comma-separated skill names for multi-skill filter
       exp?.mcp_servers ? (() => { try { return JSON.parse(exp.mcp_servers); } catch { return undefined; } })() : undefined,
     )
       .then((result) => {

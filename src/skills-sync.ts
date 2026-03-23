@@ -52,13 +52,18 @@ export function syncSkillsToGroup(
 ): void {
   fs.mkdirSync(groupSkillsDir, { recursive: true });
 
+  // Parse skill filter: supports comma-separated list of skill names
+  const filterSet = skillFilter
+    ? new Set(skillFilter.split(',').map(s => s.trim()).filter(Boolean))
+    : null;
+
   // 1. Sync skills from local skills/ directory
   const localSkillsPath = getLocalSkillsPath();
   if (localSkillsPath) {
     let synced = 0;
     for (const skillDir of fs.readdirSync(localSkillsPath)) {
-      // If a skill filter is set, only sync that specific skill
-      if (skillFilter && skillDir !== skillFilter) continue;
+      // If a skill filter is set, only sync matching skills
+      if (filterSet && !filterSet.has(skillDir)) continue;
       const srcDir = path.join(localSkillsPath, skillDir);
       if (!fs.statSync(srcDir).isDirectory()) continue;
       const dstDir = path.join(groupSkillsDir, skillDir);

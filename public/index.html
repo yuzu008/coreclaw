@@ -423,11 +423,34 @@ html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Sego
 /* Skill selector popup */
 .skill-selector-header {
   font-size: 14px; font-weight: 600; color: var(--text-primary);
-  padding: 12px 16px 8px; border-bottom: 1px solid var(--border);
+  padding: 12px 16px 8px;
 }
-.skill-selector-list { max-height: 320px; overflow-y: auto; }
+.skill-selector-toolbar {
+  display: flex; align-items: center; gap: 8px; padding: 4px 16px 8px;
+  border-bottom: 1px solid var(--border);
+}
+.skill-selector-toolbar input {
+  flex: 1; padding: 6px 10px; font-size: 13px;
+  background: var(--bg-tertiary); border: 1px solid var(--border);
+  border-radius: 5px; color: var(--text-primary); outline: none;
+}
+.skill-selector-toolbar input:focus { border-color: var(--accent); }
+.skill-selector-toolbar input::placeholder { color: var(--text-muted); }
+.skill-selector-count {
+  font-size: 11px; color: var(--text-muted); white-space: nowrap; flex-shrink: 0;
+}
+.skill-selector-actions {
+  display: flex; gap: 4px; flex-shrink: 0;
+}
+.skill-selector-actions button {
+  background: var(--bg-tertiary); border: 1px solid var(--border);
+  color: var(--text-secondary); font-size: 11px; padding: 3px 8px;
+  border-radius: 4px; cursor: pointer; transition: all .15s; white-space: nowrap;
+}
+.skill-selector-actions button:hover { border-color: var(--accent); color: var(--accent); }
+.skill-selector-list { max-height: 400px; overflow-y: auto; }
 .skill-selector-item {
-  display: flex; align-items: center; gap: 10px; padding: 10px 16px;
+  display: flex; align-items: center; gap: 10px; padding: 8px 16px;
   cursor: pointer; transition: background .1s; border-bottom: 1px solid var(--border);
 }
 .skill-selector-item:last-child { border-bottom: none; }
@@ -443,6 +466,63 @@ html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Sego
 .skill-selector-item .skill-sel-check {
   margin-left: auto; font-size: 14px; color: var(--accent); flex-shrink: 0;
 }
+.skill-selector-empty {
+  padding: 16px; text-align: center; color: var(--text-muted); font-size: 13px;
+}
+/* Skill picker row in modals */
+.skill-picker-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 10px; background: var(--bg-tertiary);
+  border-radius: var(--radius); border: 1px solid var(--border);
+}
+.skill-picker-badge {
+  flex: 1; font-size: 13px; color: var(--text-secondary);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.skill-picker-btn {
+  background: var(--bg-secondary); border: 1px solid var(--border);
+  color: var(--accent); font-size: 12px; font-weight: 500; padding: 4px 12px;
+  border-radius: 4px; cursor: pointer; transition: all .15s; white-space: nowrap;
+}
+.skill-picker-btn:hover { background: var(--bg-hover); border-color: var(--accent); }
+/* Skill checkbox list in modals */
+.skill-checkbox-container {
+  background: var(--bg-tertiary); border-radius: var(--radius); border: 1px solid var(--border);
+  overflow: hidden;
+}
+.skill-checkbox-toolbar {
+  display: flex; align-items: center; gap: 6px; padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+}
+.skill-checkbox-toolbar input {
+  flex: 1; padding: 4px 8px; font-size: 12px;
+  background: var(--bg-primary); border: 1px solid var(--border);
+  border-radius: 4px; color: var(--text-primary); outline: none;
+}
+.skill-checkbox-toolbar input:focus { border-color: var(--accent); }
+.skill-checkbox-toolbar input::placeholder { color: var(--text-muted); }
+.skill-checkbox-toolbar .skill-cb-count {
+  font-size: 11px; color: var(--text-muted); white-space: nowrap;
+}
+.skill-checkbox-toolbar button {
+  background: none; border: 1px solid var(--border); color: var(--text-secondary);
+  font-size: 11px; padding: 2px 6px; border-radius: 3px; cursor: pointer;
+  white-space: nowrap;
+}
+.skill-checkbox-toolbar button:hover { border-color: var(--accent); color: var(--accent); }
+.skill-checkbox-items {
+  display: flex; flex-wrap: wrap; gap: 6px; padding: 8px;
+  max-height: 160px; overflow-y: auto; align-items: flex-start;
+}
+.skill-checkbox-items label {
+  display: flex; align-items: center; gap: 4px; font-size: 13px;
+  color: var(--text-secondary); cursor: pointer; padding: 2px 8px;
+  border-radius: 4px; background: var(--bg-secondary); border: 1px solid var(--border);
+  transition: all .1s;
+}
+.skill-checkbox-items label:hover { border-color: var(--accent); }
+.skill-checkbox-items label.checked { border-color: var(--accent); color: var(--text-primary); background: var(--accent-subtle, rgba(99,102,241,.08)); }
+.skill-checkbox-items input[type="checkbox"] { margin: 0; }
 
 /* Theme toggle */
 .theme-toggle {
@@ -891,13 +971,37 @@ html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Sego
     </div>
   </div>
 
-  <!-- Skill Selector Popup -->
+  <!-- Skill Selector Popup (sidebar / chat header) -->
   <div class="search-popup" id="skillSelectorPopup" onclick="if(event.target===this)closeSkillSelector()">
     <div class="search-popup-content">
-      <div class="skill-selector-header">Select Active Skill</div>
+      <div class="skill-selector-header">Select Skills</div>
+      <div class="skill-selector-toolbar">
+        <input type="text" id="skillSelectorSearch" placeholder="Filter skills..." oninput="filterSkillSelectorList(this.value)">
+        <span class="skill-selector-count" id="skillSelectorCount"></span>
+        <div class="skill-selector-actions">
+          <button onclick="toggleAllSkillsForChat(true)">All</button>
+          <button onclick="toggleAllSkillsForChat(false)">None</button>
+        </div>
+      </div>
       <div class="skill-selector-list" id="skillSelectorList">
         <div class="search-empty">Loading skills...</div>
       </div>
+    </div>
+  </div>
+
+  <!-- Modal Skill Selector Popup (New Chat / Edit Chat) -->
+  <div class="search-popup" id="modalSkillSelectorPopup" style="z-index:1100" onclick="if(event.target===this)closeModalSkillSelector()">
+    <div class="search-popup-content">
+      <div class="skill-selector-header">Select Skills</div>
+      <div class="skill-selector-toolbar">
+        <input type="text" id="modalSkillSearch" placeholder="Filter skills..." oninput="renderModalSkillList()">
+        <span class="skill-selector-count" id="modalSkillCount"></span>
+        <div class="skill-selector-actions">
+          <button onclick="toggleAllModalSkills(true)">All</button>
+          <button onclick="toggleAllModalSkills(false)">None</button>
+        </div>
+      </div>
+      <div class="skill-selector-list" id="modalSkillList"></div>
     </div>
   </div>
 
@@ -957,10 +1061,12 @@ html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Sego
     <h3>💬 New Chat Group</h3>
     <label for="expNameInput">Name</label>
     <input type="text" id="expNameInput" placeholder="e.g. Code review discussion">
-    <label for="expSkillSelect">Skill</label>
-    <select id="expSkillSelect">
-      <option value="">All Skills (default)</option>
-    </select>
+    <label>Skills</label>
+    <div class="skill-picker-row">
+      <span class="skill-picker-badge" id="expSkillBadge">All Skills</span>
+      <button type="button" class="skill-picker-btn" onclick="openModalSkillSelector('exp')">Select...</button>
+    </div>
+    <input type="hidden" id="expSkillValue" value="">
     <label for="expDescInput">Description (optional)</label>
     <textarea id="expDescInput" rows="3" placeholder="Brief description of the experiment..."></textarea>
     <label for="expSyncRepoInput">Sync Repository (optional)</label>
@@ -980,10 +1086,12 @@ html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Sego
     <h3>✏️ Edit Chat</h3>
     <label for="renameInput">Name</label>
     <input type="text" id="renameInput" placeholder="Chat name">
-    <label for="editSkillSelect">Skill</label>
-    <select id="editSkillSelect">
-      <option value="">All Skills (default)</option>
-    </select>
+    <label>Skills</label>
+    <div class="skill-picker-row">
+      <span class="skill-picker-badge" id="editSkillBadge">All Skills</span>
+      <button type="button" class="skill-picker-btn" onclick="openModalSkillSelector('edit')">Select...</button>
+    </div>
+    <input type="hidden" id="editSkillValue" value="">
     <label for="editDescInput">Description</label>
     <textarea id="editDescInput" rows="3" placeholder="Chat description..."></textarea>
     <label for="editSyncRepoInput">Sync Repository</label>
@@ -1449,7 +1557,8 @@ function showNewExperimentModal() {
   document.getElementById('expNameInput').value = '';
   document.getElementById('expDescInput').value = '';
   document.getElementById('expSyncRepoInput').value = '';
-  populateSkillSelect();
+  document.getElementById('expSkillValue').value = '';
+  updateSkillPickerBadge('exp', '');
   populateMcpCheckboxes('expMcpCheckboxes', []);
   document.getElementById('newExpModal').classList.add('visible');
   document.getElementById('expNameInput').focus();
@@ -1463,7 +1572,7 @@ async function createExperiment() {
   const name = document.getElementById('expNameInput').value.trim() || 'Untitled Experiment';
   const description = document.getElementById('expDescInput').value.trim();
   const sync_repo = document.getElementById('expSyncRepoInput').value.trim();
-  const skill = document.getElementById('expSkillSelect').value;
+  const skill = document.getElementById('expSkillValue').value;
   const mcp_servers = getSelectedMcpServers('expMcpCheckboxes');
   const exp = await api('/experiments', {
     method: 'POST',
@@ -1481,8 +1590,9 @@ async function renameExperiment() {
   document.getElementById('renameInput').value = exp.name;
   document.getElementById('editDescInput').value = exp.description || '';
   document.getElementById('editSyncRepoInput').value = exp.sync_repo || '';
-  // Populate skill select
-  await populateEditSkillSelect(exp.skill || '');
+  // Set skill value and badge
+  document.getElementById('editSkillValue').value = exp.skill || '';
+  updateSkillPickerBadge('edit', exp.skill || '');
   populateMcpCheckboxes('editMcpCheckboxes', exp.mcp_servers ? (() => { try { return JSON.parse(exp.mcp_servers); } catch { return []; } })() : []);
   document.getElementById('renameExpModal').classList.add('visible');
   const input = document.getElementById('renameInput');
@@ -1491,12 +1601,7 @@ async function renameExperiment() {
 }
 
 async function populateEditSkillSelect(currentSkill) {
-  if (!cachedSkills.length) {
-    try { const res = await fetch('/api/skills'); cachedSkills = await res.json(); } catch (e) { cachedSkills = []; }
-  }
-  const sel = document.getElementById('editSkillSelect');
-  sel.innerHTML = '<option value="">All Skills (default)</option>' +
-    cachedSkills.map(s => `<option value="${esc(s.name)}" ${s.name === currentSkill ? 'selected' : ''}>${esc(s.name)}</option>`).join('');
+  // Legacy — now handled by populateSkillCheckboxes
 }
 
 async function submitRename() {
@@ -1505,7 +1610,7 @@ async function submitRename() {
   if (!newName) return;
   const newDesc = document.getElementById('editDescInput').value.trim();
   const newSyncRepo = document.getElementById('editSyncRepoInput').value.trim();
-  const newSkill = document.getElementById('editSkillSelect').value;
+  const newSkill = document.getElementById('editSkillValue').value;
   const newMcpServers = getSelectedMcpServers('editMcpCheckboxes');
   await api(`/experiments/${currentExpId}`, {
     method: 'PATCH',
@@ -2555,12 +2660,17 @@ async function toggleScanWhitelist(checkbox, findingIndex) {
 // ===== Skill selector (sidebar popup) =====
 async function showSkillSelector() {
   const popup = document.getElementById('skillSelectorPopup');
+  const searchInput = document.getElementById('skillSelectorSearch');
+  if (searchInput) searchInput.value = '';
   popup.classList.add('visible');
   await renderSkillSelectorList();
+  if (searchInput) searchInput.focus();
 }
 
 function closeSkillSelector() {
   document.getElementById('skillSelectorPopup').classList.remove('visible');
+  const searchInput = document.getElementById('skillSelectorSearch');
+  if (searchInput) searchInput.value = '';
 }
 
 async function renderSkillSelectorList() {
@@ -2572,66 +2682,253 @@ async function renderSkillSelectorList() {
   }
   const container = document.getElementById('skillSelectorList');
   const exp = currentExpId ? experiments.find(e => e.id === currentExpId) : null;
-  const currentSkill = exp ? (exp.skill || '') : '';
-  let html = `<div class="skill-selector-item ${!currentSkill ? 'active' : ''}" onclick="selectSkillForChat('')">
-    <div>
-      <div class="skill-sel-name">All Skills</div>
-      <div class="skill-sel-desc">Use all available skills</div>
-    </div>
-    ${!currentSkill ? '<span class="skill-sel-check">\u2713</span>' : ''}
-  </div>`;
-  html += cachedSkills.map(s => `
-    <div class="skill-selector-item ${currentSkill === s.name ? 'active' : ''}" onclick="selectSkillForChat('${esc(s.name)}')">
+  const currentSkills = exp && exp.skill ? exp.skill.split(',').map(s => s.trim()).filter(Boolean) : [];
+  const isAll = currentSkills.length === 0;
+  const filter = (document.getElementById('skillSelectorSearch')?.value || '').toLowerCase();
+
+  const filtered = filter
+    ? cachedSkills.filter(s => s.name.toLowerCase().includes(filter) || (s.description || '').toLowerCase().includes(filter))
+    : cachedSkills;
+
+  // Update count
+  const selectedCount = isAll ? cachedSkills.length : currentSkills.length;
+  const countEl = document.getElementById('skillSelectorCount');
+  if (countEl) countEl.textContent = `${selectedCount}/${cachedSkills.length}`;
+
+  let html = '';
+  if (!filter) {
+    html += `<div class="skill-selector-item ${isAll ? 'active' : ''}" onclick="toggleSkillForChat('__all__')">
       <div>
-        <div class="skill-sel-name">${esc(s.name)}</div>
-        <div class="skill-sel-desc">${esc(s.description)}</div>
+        <div class="skill-sel-name">All Skills</div>
+        <div class="skill-sel-desc">Use all available skills</div>
       </div>
-      ${currentSkill === s.name ? '<span class="skill-sel-check">\u2713</span>' : ''}
-    </div>
-  `).join('');
+      ${isAll ? '<span class="skill-sel-check">\u2713</span>' : ''}
+    </div>`;
+  }
+  if (filtered.length === 0) {
+    html += '<div class="skill-selector-empty">No matching skills</div>';
+  } else {
+    html += filtered.map(s => {
+      const selected = isAll || currentSkills.includes(s.name);
+      return `
+      <div class="skill-selector-item ${selected ? 'active' : ''}" onclick="toggleSkillForChat('${esc(s.name)}')">
+        <div>
+          <div class="skill-sel-name">${esc(s.name)}</div>
+          <div class="skill-sel-desc">${esc(s.description)}</div>
+        </div>
+        ${selected ? '<span class="skill-sel-check">\u2713</span>' : ''}
+      </div>`;
+    }).join('');
+  }
+  html += `<div style="padding:8px;text-align:right;border-top:1px solid var(--border);margin-top:4px">
+    <button class="btn-primary" onclick="closeSkillSelector()" style="font-size:13px;padding:4px 16px">Done</button>
+  </div>`;
   container.innerHTML = html;
 }
 
-async function selectSkillForChat(skillName) {
-  if (currentExpId) {
-    await api('/experiments/' + currentExpId, {
-      method: 'PUT',
-      body: JSON.stringify({ skill: skillName }),
-    });
-    const exp = experiments.find(e => e.id === currentExpId);
-    if (exp) exp.skill = skillName;
-    updateChatSkillBadge();
+function filterSkillSelectorList(query) {
+  renderSkillSelectorList();
+}
+
+async function toggleAllSkillsForChat(selectAll) {
+  if (!currentExpId) return;
+  const exp = experiments.find(e => e.id === currentExpId);
+  if (!exp) return;
+  // selectAll=true → '' (all skills); selectAll=false → '' (reset to all, since no-skills is not meaningful)
+  await api('/experiments/' + currentExpId, { method: 'PUT', body: JSON.stringify({ skill: '' }) });
+  exp.skill = '';
+  updateChatSkillBadge();
+  updateSidebarSkillBadge(exp.skill);
+  await renderSkillSelectorList();
+}
+
+async function toggleSkillForChat(skillName) {
+  if (!currentExpId) return;
+  const exp = experiments.find(e => e.id === currentExpId);
+  if (!exp) return;
+  const currentSkills = exp.skill ? exp.skill.split(',').map(s => s.trim()).filter(Boolean) : [];
+
+  let newSkills;
+  if (skillName === '__all__') {
+    // Toggle: if currently filtered, switch to all; if already all, stay all
+    newSkills = [];
+  } else {
+    const isAll = currentSkills.length === 0;
+    if (isAll) {
+      // Was "all" — now select only this one skill by deselecting everything else
+      // Actually, toggle off this skill from "all" = all except this one
+      newSkills = cachedSkills.map(s => s.name).filter(n => n !== skillName);
+    } else if (currentSkills.includes(skillName)) {
+      // Deselect this skill
+      newSkills = currentSkills.filter(n => n !== skillName);
+      if (newSkills.length === 0) newSkills = []; // no skills selected = all
+    } else {
+      // Select this skill
+      newSkills = [...currentSkills, skillName];
+    }
+    // If all skills are now selected, reset to empty (= all)
+    if (newSkills.length >= cachedSkills.length) newSkills = [];
   }
-  updateSidebarSkillBadge(skillName);
-  closeSkillSelector();
+
+  const skillStr = newSkills.join(',');
+  await api('/experiments/' + currentExpId, {
+    method: 'PUT',
+    body: JSON.stringify({ skill: skillStr }),
+  });
+  exp.skill = skillStr;
+  updateChatSkillBadge();
+  updateSidebarSkillBadge(skillStr);
+  await renderSkillSelectorList();
+}
+
+async function selectSkillForChat(skillName) {
+  // Legacy single-skill — redirect to toggle
+  await toggleSkillForChat(skillName);
 }
 
 function updateChatSkillBadge() {
   const badge = document.getElementById('chatSkillBadge');
   const exp = currentExpId ? experiments.find(e => e.id === currentExpId) : null;
-  badge.textContent = exp && exp.skill ? '\ud83e\udde9 ' + exp.skill : '';
+  if (!exp || !exp.skill) {
+    badge.textContent = '';
+    return;
+  }
+  const skills = exp.skill.split(',').map(s => s.trim()).filter(Boolean);
+  badge.textContent = skills.length === 1 ? '\ud83e\udde9 ' + skills[0] : '\ud83e\udde9 ' + skills.length + ' skills';
 }
 
-function updateSidebarSkillBadge(skillName) {
+function updateSidebarSkillBadge(skillStr) {
   const badge = document.getElementById('activeSkillBadge');
-  badge.textContent = skillName || '';
+  if (!skillStr) { badge.textContent = ''; return; }
+  const skills = skillStr.split(',').map(s => s.trim()).filter(Boolean);
+  badge.textContent = skills.length === 1 ? skills[0] : skills.length + ' skills';
 }
 
 async function changeChatSkill() {
   await showSkillSelector();
 }
 
-// Populate skill dropdown in New Chat modal
+// Populate skill dropdown in New Chat modal — replaced by checkbox version
 async function populateSkillSelect() {
-  if (!cachedSkills.length) {
-    try {
-      const res = await fetch('/api/skills');
-      cachedSkills = await res.json();
-    } catch (e) { cachedSkills = []; }
+  // Legacy — now handled by populateSkillCheckboxes
+}
+
+// ===== Modal Skill Selector (New Chat / Edit Chat) =====
+let _modalSkillPrefix = '';  // 'exp' or 'edit'
+let _modalSkillSelected = new Set();  // tracks selected skill names
+
+function updateSkillPickerBadge(prefix, skillStr) {
+  const badge = document.getElementById(prefix + 'SkillBadge');
+  if (!badge) return;
+  if (!skillStr) {
+    badge.textContent = 'All Skills';
+    return;
   }
-  const sel = document.getElementById('expSkillSelect');
-  sel.innerHTML = '<option value="">All Skills (default)</option>' +
-    cachedSkills.map(s => `<option value="${esc(s.name)}">${esc(s.name)}</option>`).join('');
+  const skills = skillStr.split(',').map(s => s.trim()).filter(Boolean);
+  if (skills.length === 0) {
+    badge.textContent = 'All Skills';
+  } else if (skills.length <= 3) {
+    badge.textContent = skills.join(', ');
+  } else {
+    badge.textContent = skills.slice(0, 2).join(', ') + ' +' + (skills.length - 2);
+  }
+}
+
+async function openModalSkillSelector(prefix) {
+  _modalSkillPrefix = prefix;
+  if (!cachedSkills.length) {
+    try { const res = await fetch('/api/skills'); cachedSkills = await res.json(); } catch (e) { cachedSkills = []; }
+  }
+  const skillStr = document.getElementById(prefix + 'SkillValue').value;
+  const selected = skillStr ? skillStr.split(',').map(s => s.trim()).filter(Boolean) : [];
+  // Empty = all skills selected
+  _modalSkillSelected = new Set(selected.length > 0 ? selected : cachedSkills.map(s => s.name));
+  const searchInput = document.getElementById('modalSkillSearch');
+  if (searchInput) searchInput.value = '';
+  renderModalSkillList();
+  document.getElementById('modalSkillSelectorPopup').classList.add('visible');
+  if (searchInput) searchInput.focus();
+}
+
+function closeModalSkillSelector() {
+  document.getElementById('modalSkillSelectorPopup').classList.remove('visible');
+  // Write back selection to hidden input + badge
+  const allSelected = _modalSkillSelected.size >= cachedSkills.length;
+  const skillStr = allSelected ? '' : [..._modalSkillSelected].join(',');
+  document.getElementById(_modalSkillPrefix + 'SkillValue').value = skillStr;
+  updateSkillPickerBadge(_modalSkillPrefix, skillStr);
+}
+
+function renderModalSkillList() {
+  const container = document.getElementById('modalSkillList');
+  const filter = (document.getElementById('modalSkillSearch')?.value || '').toLowerCase();
+  const filtered = filter
+    ? cachedSkills.filter(s => s.name.toLowerCase().includes(filter) || (s.description || '').toLowerCase().includes(filter))
+    : cachedSkills;
+
+  const isAll = _modalSkillSelected.size >= cachedSkills.length;
+  const countEl = document.getElementById('modalSkillCount');
+  if (countEl) countEl.textContent = `${_modalSkillSelected.size}/${cachedSkills.length}`;
+
+  let html = '';
+  if (!filter) {
+    html += `<div class="skill-selector-item ${isAll ? 'active' : ''}" onclick="modalSkillToggle('__all__')">
+      <div>
+        <div class="skill-sel-name">All Skills</div>
+        <div class="skill-sel-desc">Use all available skills</div>
+      </div>
+      ${isAll ? '<span class="skill-sel-check">\u2713</span>' : ''}
+    </div>`;
+  }
+  if (filtered.length === 0) {
+    html += '<div class="skill-selector-empty">No matching skills</div>';
+  } else {
+    html += filtered.map(s => {
+      const selected = _modalSkillSelected.has(s.name);
+      return `
+      <div class="skill-selector-item ${selected ? 'active' : ''}" onclick="modalSkillToggle('${esc(s.name)}')">
+        <div>
+          <div class="skill-sel-name">${esc(s.name)}</div>
+          <div class="skill-sel-desc">${esc(s.description)}</div>
+        </div>
+        ${selected ? '<span class="skill-sel-check">\u2713</span>' : ''}
+      </div>`;
+    }).join('');
+  }
+  html += `<div style="padding:8px;text-align:right;border-top:1px solid var(--border);margin-top:4px">
+    <button class="btn-primary" onclick="closeModalSkillSelector()" style="font-size:13px;padding:4px 16px">Done</button>
+  </div>`;
+  container.innerHTML = html;
+}
+
+function modalSkillToggle(skillName) {
+  if (skillName === '__all__') {
+    // Select all
+    _modalSkillSelected = new Set(cachedSkills.map(s => s.name));
+  } else {
+    const isAll = _modalSkillSelected.size >= cachedSkills.length;
+    if (isAll) {
+      // Deselect this one from all
+      _modalSkillSelected = new Set(cachedSkills.map(s => s.name).filter(n => n !== skillName));
+    } else if (_modalSkillSelected.has(skillName)) {
+      _modalSkillSelected.delete(skillName);
+      // If none selected, revert to all
+      if (_modalSkillSelected.size === 0) _modalSkillSelected = new Set(cachedSkills.map(s => s.name));
+    } else {
+      _modalSkillSelected.add(skillName);
+    }
+    // If all are now selected, keep as full set (will be treated as "all")
+  }
+  renderModalSkillList();
+}
+
+function toggleAllModalSkills(selectAll) {
+  if (selectAll) {
+    _modalSkillSelected = new Set(cachedSkills.map(s => s.name));
+  } else {
+    _modalSkillSelected.clear();
+  }
+  renderModalSkillList();
 }
 
 function addMcpServerRow(server) {
