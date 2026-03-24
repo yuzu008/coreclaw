@@ -6,6 +6,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.1.25] - 2026-03-25
+
+### Fixed
+
+- **Japanese characters appear as □ in generated PNG images** — `plt.rcParams.update()` in three scientist skill templates was overwriting the system-wide `matplotlibrc` font list with `["Arial", "Helvetica", "DejaVu Sans"]`, which contains no CJK fonts. Fixed by prepending `"Noto Sans CJK JP"` and `"IPAGothic"` to the `font.sans-serif` list in all three affected files:
+  - `skills/scientist/scientific-pipeline-scaffold/SKILL.md`
+  - `skills/scientist/scientific-hypothesis-pipeline/SKILL.md`
+  - `skills/scientist/scientific-publication-figures/SKILL.md`
+
+---
+
 ## [0.1.24] - 2026-03-25
 
 ### Added
