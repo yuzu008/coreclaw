@@ -6,6 +6,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.1.23] - 2026-03-25
+
+### Fixed
+
+- **init() 関数宣言の欠落** — v0.1.22 で Mermaid ポップアップコードを挿入した際に `async function init() {` の宣言行が消えてしまい、Chat Group が表示されずサイドバー開閉も動作しない状態になっていた問題を修正。
+- **アーティファクトビューアのズームイン/アウト方向** — ＋ボタンでズームアウト・ーボタンでズームインされていた方向の逆転バグを修正（＋ → `avZoom(+10)`、ー → `avZoom(-10)`）。
+- **チャットアウトプットが表示されない** — v0.1.22 の「ストリーミング再読み込み耐性」実装で `streaming:true` メタデータを持つ全メッセージをスキップしていたため、完了済みのアシスタントメッセージが一切表示されなくなっていた問題を修正。
+  - `src/experiments.ts` — `updateMessageContent()` でコンテンツ更新時に `metadata = NULL` も同時に設定し、完了後に `streaming:true` フラグが残らないようにした。
+  - `public/index.html` — スキップ条件を `meta.streaming && !msg.content`（content が空の場合のみ）に変更し、既存 DB に残っている `streaming:true` 付き完了済みメッセージも正しく表示されるようにした。
+
+---
+
 ## [0.1.22] - 2026-03-24
 
 ### Added
