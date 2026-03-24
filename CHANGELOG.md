@@ -6,6 +6,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.1.17] - 2026-03-24
+
+### Changed
+
+- **Artifact viewer — full 90 % width**: removed the `max-width: 1100px` cap from `.artifact-viewer`; the popup now spans exactly 90 % of the viewport width on any screen size.
+- **Artifact viewer — zoom in / out**: added **－** and **＋** buttons in the viewer header. Each click adjusts the content zoom level by 10 % (range: 50 %–200 %). The current zoom percentage is displayed between the buttons. Zoom resets to 100 % each time a new file is opened.
+
+---
+
 ## [0.1.16] - 2026-03-24
 
 ### Added

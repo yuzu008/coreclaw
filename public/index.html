@@ -829,7 +829,7 @@ html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Sego
 
 /* ===== Artifact Viewer Modal ===== */
 .artifact-viewer {
-  width: 90vw; max-width: 1100px; height: 88vh;
+  width: 90vw; height: 88vh;
   display: flex; flex-direction: column;
   padding: 0; min-width: unset; border-radius: 12px; overflow: hidden;
 }
@@ -861,6 +861,10 @@ html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Sego
 }
 .av-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
 .av-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.av-zoom-label {
+  font-size: 11px; color: var(--text-muted); min-width: 36px; text-align: center;
+  font-family: var(--font-mono); user-select: none;
+}
 .av-body {
   flex: 1; overflow-y: auto; overflow-x: hidden;
   background: var(--bg-primary);
@@ -1454,6 +1458,9 @@ html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Sego
       <span class="av-badge" id="avBadge"></span>
       <div class="av-actions">
         <button class="av-btn" id="avRawBtn" onclick="avToggleRaw()">Raw</button>
+        <button class="av-btn" onclick="avZoom(-10)" title="Zoom out">－</button>
+        <span class="av-zoom-label" id="avZoomLabel">100%</span>
+        <button class="av-btn" onclick="avZoom(10)" title="Zoom in">＋</button>
         <button class="av-btn" onclick="avDownload()">⬇ Download</button>
         <button class="modal-close" onclick="closeModal('artifactViewerModal')" title="Close (Esc)">✕</button>
       </div>
@@ -2016,6 +2023,17 @@ let avCurrentFilepath = null;
 let avRawText = null;
 let avShowingRaw = false;
 let avMermaidCounter = 0;
+let avZoomLevel = 100;
+
+function avApplyZoom() {
+  document.getElementById('avBody').style.zoom = `${avZoomLevel}%`;
+  document.getElementById('avZoomLabel').textContent = `${avZoomLevel}%`;
+}
+
+function avZoom(delta) {
+  avZoomLevel = Math.min(200, Math.max(50, avZoomLevel + delta));
+  avApplyZoom();
+}
 
 async function viewArtifact(filepath) {
   avCurrentFilepath = filepath;
@@ -2027,6 +2045,7 @@ async function viewArtifact(filepath) {
   avCurrentName = name;
   avRawText = null;
   avShowingRaw = false;
+  avZoomLevel = 100;
 
   // Header: filename + badge
   document.getElementById('avFilename').textContent = name;
@@ -2055,6 +2074,7 @@ async function viewArtifact(filepath) {
   rawBtn.classList.remove('active');
 
   document.getElementById('avBody').innerHTML = '<div class="av-loading">Loading...</div>';
+  avApplyZoom();
   document.getElementById('artifactViewerModal').classList.add('visible');
 
   await avLoadContent();
