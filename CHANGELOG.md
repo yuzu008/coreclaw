@@ -6,6 +6,22 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.1.16] - 2026-03-24
+
+### Added
+
+- **Artifact inline viewer** — Clicking 👁 View in the Artifacts panel now opens a full-featured popup modal in the same window instead of a separate tab.
+  - **Markdown** — Rendered via `marked.js` with a custom image renderer that rewrites relative `figures/` paths to `/api/experiments/:id/artifacts/...` URLs, so figures embedded in `report.md` display inline.
+  - **PNG / JPG / WebP / GIF** — Images rendered directly in the viewer body.
+  - **JSON** — Pretty-printed with `JSON.stringify(…, null, 2)`.
+  - **Python / JavaScript / TypeScript / R / Shell / YAML / CSV / plain-text** — Syntax-highlighted monospace code block.
+  - **Mermaid (`.mmd`)** — Diagram rendered via `mermaid@11` (CDN), same dark-theme settings as `viewer.html`.
+  - **PDF** — Embedded via `<iframe>`.
+  - Raw/Rendered toggle button; Download button; Esc / ✕ / overlay-click to close.
+- `mermaid@11` CDN script added to `public/index.html`; `mermaid.initialize()` called in `init()` with theme-aware settings.
+
+---
+
 ## [0.1.15] - 2026-03-24
 
 ### Fixed
