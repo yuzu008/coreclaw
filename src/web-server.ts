@@ -31,7 +31,7 @@ import { getDatabase } from './db.js';
 import { DATA_DIR, GROUPS_DIR } from './config.js';
 import { listAvailableSkills, getSkillMetadata } from './skills-sync.js';
 import { syncExperiment, pullExperiment } from './github-sync.js';
-import { execSync } from 'child_process';
+import { execSync, spawn } from 'child_process';
 import { createDeflateRaw, inflateRawSync } from 'zlib';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -1330,7 +1330,7 @@ async function updateComponent(component: string): Promise<{ ok: boolean; messag
         if (local === remote && diskPkg.version !== RUNNING_VERSION) {
           setTimeout(() => {
             logger.info('Restarting server to apply pending update...');
-            process.exit(0);
+            restartProcess();
           }, 1500);
           return { ok: true, message: `Restarting to apply v${diskPkg.version}...`, version: diskPkg.version, restart: true };
         }
@@ -1361,7 +1361,7 @@ async function updateComponent(component: string): Promise<{ ok: boolean; messag
         // Schedule server restart after response is sent
         setTimeout(() => {
           logger.info('Restarting server after CoreClaw update...');
-          process.exit(0);
+          restartProcess();
         }, 1500);
         return { ok: true, message: `CoreClaw updated to v${pkg.version}.${rebuildMsg} Restarting server...`, version: pkg.version, restart: true };
       }
@@ -1395,6 +1395,27 @@ async function updateComponent(component: string): Promise<{ ok: boolean; messag
 }
 
 export const WEB_PORT = parseInt(process.env.CORECLAW_WEB_PORT || process.env.WEB_PORT || '3000', 10);
+
+/**
+ * Spawn a new server process with the same argv, inheriting the current port
+ * numbers so that callers see no change in endpoints after restart.
+ * The child is detached so it outlives the current process.
+ */
+function restartProcess(): void {
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    // Propagate resolved port numbers so defaults are preserved across restarts
+    CORECLAW_WEB_PORT: String(WEB_PORT),
+    CREDENTIAL_PROXY_PORT: String(process.env.CREDENTIAL_PROXY_PORT || '3001'),
+  };
+  const child = spawn(process.argv[0], process.argv.slice(1), {
+    env,
+    stdio: 'inherit',
+    detached: true,
+  });
+  child.unref();
+  process.exit(0);
+}
 
 export function startWebServer(port = WEB_PORT): Promise<void> {
   // Initialize experiments database
