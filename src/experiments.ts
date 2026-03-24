@@ -363,7 +363,7 @@ export function getMessagesFromOffset(
 
 export function updateMessageContent(msgId: string, content: string): void {
   getDb()
-    .prepare('UPDATE experiment_messages SET content = ? WHERE id = ?')
+    .prepare('UPDATE experiment_messages SET content = ?, metadata = NULL WHERE id = ?')
     .run(content, msgId);
 }
 

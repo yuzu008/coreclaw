@@ -1810,7 +1810,7 @@ async function selectExperiment(id) {
     // Skip streaming-incomplete messages — they'll be restored via list_tasks
     try {
       const meta = msg.metadata ? JSON.parse(msg.metadata) : {};
-      if (meta.streaming) continue;
+      if (meta.streaming && !msg.content) continue;
     } catch { /* ignore */ }
     appendMessage(msg);
   }
