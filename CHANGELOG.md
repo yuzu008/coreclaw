@@ -6,6 +6,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.1.18] - 2026-03-24
+
+### Fixed
+
+- **Artifact viewer width not taking effect** — The base `.modal { max-width: 500px }` rule was overriding `.artifact-viewer`'s `width: 90vw` declaration. Added `max-width: none` to `.artifact-viewer` to explicitly reset the inherited constraint; the popup now spans 90 % of the viewport width as intended.
+
+---
+
 ## [0.1.17] - 2026-03-24
 
 ### Changed

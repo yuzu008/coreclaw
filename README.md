@@ -198,6 +198,7 @@ See [CHANGELOG.md](CHANGELOG.md) for the full version history.
 
 | Version | Date | Summary |
 |---------|------|---------|
+| **v0.1.18** | 2026-03-24 | Fix: artifact viewer width now correctly 90% — override `.modal` max-width |
 | **v0.1.17** | 2026-03-24 | Artifact viewer: full 90% viewport width + zoom in/out (－/＋) buttons |
 | **v0.1.16** | 2026-03-24 | Artifact inline viewer — popup for Markdown (with PNG embed), JSON, Python, Mermaid, images, PDF |
 | **v0.1.15** | 2026-03-24 | Fix: background agent output disappears — summariser container stole `_close` IPC sentinel from next main-agent run |
