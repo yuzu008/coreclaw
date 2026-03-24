@@ -557,6 +557,15 @@ async function main(): Promise<void> {
         if (output.result) {
           const text = output.result.replace(/<internal>[\s\S]*?<\/internal>/g, '').trim();
           if (text) collectedText += (collectedText ? '\n' : '') + text;
+          // Close the container's IPC wait loop immediately after receiving output.
+          // Without this, the summariser container lingers in waitForIpcMessage() and
+          // can steal the _close sentinel written by the next main-agent run, causing
+          // the main agent to hang and never call onDone (agent_done never broadcast).
+          const sentinelPath = path.join(DATA_DIR, 'ipc', groupFolder, 'input', '_close');
+          try {
+            fs.mkdirSync(path.dirname(sentinelPath), { recursive: true });
+            fs.writeFileSync(sentinelPath, '');
+          } catch { /* ignore */ }
         }
       },
     )
