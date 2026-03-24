@@ -1494,6 +1494,7 @@ async function updateComponent(component: string): Promise<{ ok: boolean; messag
         }
         execSync('git pull origin main 2>&1', { cwd: projectRoot, encoding: 'utf-8', timeout: 60000, env: { ...process.env, ...gitEnv } });
         execSync('npm install 2>&1', { cwd: projectRoot, encoding: 'utf-8', timeout: 120000 });
+        execSync('npm run build 2>&1', { cwd: projectRoot, encoding: 'utf-8', timeout: 120000 });
 
         // Check if container/ files changed and rebuild Docker image if needed
         let containerRebuilt = false;
@@ -1550,25 +1551,47 @@ async function updateComponent(component: string): Promise<{ ok: boolean; messag
 
 export const WEB_PORT = parseInt(process.env.CORECLAW_WEB_PORT || process.env.WEB_PORT || '3000', 10);
 
+// Reference to the active HTTP server — used by restartProcess() to drain
+// connections before spawning the replacement process.
+let activeHttpServer: import('http').Server | null = null;
+
 /**
- * Spawn a new server process with the same argv, inheriting the current port
- * numbers so that callers see no change in endpoints after restart.
- * The child is detached so it outlives the current process.
+ * Gracefully restart the current process:
+ *   1. Close the HTTP server so the OS releases the port.
+ *   2. Spawn a new child with identical argv + env (port numbers propagated).
+ *   3. Exit the current process.
+ *
+ * A 3-second hard-timeout forces exit if connections do not drain in time,
+ * preventing the new process from hitting EADDRINUSE.
  */
 function restartProcess(): void {
   const env: NodeJS.ProcessEnv = {
     ...process.env,
-    // Propagate resolved port numbers so defaults are preserved across restarts
     CORECLAW_WEB_PORT: String(WEB_PORT),
     CREDENTIAL_PROXY_PORT: String(process.env.CREDENTIAL_PROXY_PORT || '3001'),
   };
-  const child = spawn(process.argv[0], process.argv.slice(1), {
-    env,
-    stdio: 'inherit',
-    detached: true,
-  });
-  child.unref();
-  process.exit(0);
+
+  const doSpawn = () => {
+    const child = spawn(process.argv[0], process.argv.slice(1), {
+      env,
+      stdio: 'inherit',
+      detached: true,
+    });
+    child.unref();
+    process.exit(0);
+  };
+
+  if (activeHttpServer && activeHttpServer.listening) {
+    // Hard-kill timeout: if connections linger longer than 3 s, force-spawn anyway
+    const hardKill = setTimeout(doSpawn, 3000);
+    activeHttpServer.close(() => {
+      clearTimeout(hardKill);
+      logger.info('HTTP server closed — spawning new process');
+      doSpawn();
+    });
+  } else {
+    doSpawn();
+  }
 }
 
 export function startWebServer(port = WEB_PORT): Promise<void> {
@@ -1601,6 +1624,7 @@ export function startWebServer(port = WEB_PORT): Promise<void> {
     });
 
     server.listen(port, () => {
+      activeHttpServer = server;
       logger.info({ port }, 'Web server started — http://localhost:' + port);
       resolve();
     });
