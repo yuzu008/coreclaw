@@ -24,6 +24,7 @@ import {
   getMessagesFromOffset,
   updateMessageContent,
   deleteMessage,
+  searchMessages,
   listArtifacts,
   getArtifactsDir,
   saveArtifact,
@@ -552,6 +553,16 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
     const messages = getMessages(msgMatch[1], limit, offset);
     const total = getMessageCount(msgMatch[1]);
     sendJson(res, 200, { messages, total });
+    return;
+  }
+
+  // GET /api/experiments/:id/messages/search?q=...
+  const msgSearchMatch = pathname.match(/^\/api\/experiments\/([^/]+)\/messages\/search$/);
+  if (method === 'GET' && msgSearchMatch) {
+    const q = (url.searchParams.get('q') || '').trim();
+    if (!q) { sendJson(res, 200, { messages: [] }); return; }
+    const messages = searchMessages(msgSearchMatch[1], q, 200);
+    sendJson(res, 200, { messages });
     return;
   }
 

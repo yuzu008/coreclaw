@@ -367,6 +367,26 @@ export function updateMessageContent(msgId: string, content: string): void {
     .run(content, msgId);
 }
 
+/**
+ * Full-text search across messages of a single experiment.
+ * Returns matching messages sorted by timestamp ascending, limited to 200 results.
+ */
+export function searchMessages(
+  experimentId: string,
+  query: string,
+  limit = 200,
+): ExperimentMessage[] {
+  return getDb()
+    .prepare(
+      `SELECT * FROM experiment_messages
+       WHERE experiment_id = ? AND content LIKE ? AND role IN ('user', 'assistant')
+       ORDER BY timestamp ASC
+       LIMIT ?`,
+    )
+    .all(experimentId, `%${query}%`, limit) as ExperimentMessage[];
+}
+
+
 export function deleteMessage(msgId: string): void {
   getDb()
     .prepare('DELETE FROM experiment_messages WHERE id = ?')

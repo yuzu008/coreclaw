@@ -203,7 +203,13 @@ html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Sego
 .exp-action-btn:hover { background: var(--bg-hover); border-color: var(--text-muted); }
 .exp-action-btn.pinned { color: var(--accent); }
 .experiment-item.pinned .exp-name::before { content: '📌 '; font-size: 12px; }
+.experiment-item.archived { opacity: 0.55; }
+.experiment-item.archived .exp-name { text-decoration: line-through; text-decoration-color: var(--text-muted); }
 .pinned-separator { font-size: 11px; color: var(--text-muted); padding: 6px 12px 2px; border-top: 1px solid var(--border); margin-top: 4px; }
+
+/* Mermaid blocks in chat: clickable */
+.msg-content pre[data-lang="mermaid"] { cursor: zoom-in; }
+.msg-content pre[data-lang="mermaid"]:hover { border-color: var(--accent); }
 
 .sidebar-footer {
   padding: 10px 12px; border-top: 1px solid var(--border);
@@ -746,15 +752,43 @@ html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Sego
 /* Code blocks in messages */
 .message pre {
   background: var(--bg-primary); border: 1px solid var(--border);
-  border-radius: 6px; padding: 12px; margin: 8px 0;
-  overflow-x: auto; font-family: var(--font-mono); font-size: 13px;
+  border-radius: 6px; margin: 8px 0; overflow: hidden;
+  font-family: var(--font-mono); font-size: 13px;
+}
+.message pre code {
+  display: block; padding: 12px; overflow-x: auto;
+  background: none; font-size: inherit; border-radius: 0;
 }
 .message code {
   font-family: var(--font-mono); font-size: 13px;
   background: var(--bg-tertiary); padding: 2px 6px;
   border-radius: 3px;
 }
-.message pre code { background: none; padding: 0; }
+.message pre code { background: none; padding-inline: 0; }
+
+/* Code block header (lang + copy button) */
+.code-block-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 4px 10px; background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border); font-size: 11px;
+  color: var(--text-muted);
+}
+.code-block-lang { font-family: var(--font-mono); text-transform: lowercase; }
+.code-block-actions { display: flex; gap: 6px; align-items: center; }
+.code-copy-btn {
+  background: none; border: 1px solid var(--border); border-radius: 4px;
+  padding: 2px 8px; font-size: 11px; color: var(--text-secondary);
+  cursor: pointer; transition: background 0.15s;
+}
+.code-copy-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+.code-copy-btn.copied { color: var(--green); border-color: var(--green); }
+.code-collapse-btn {
+  background: none; border: none; color: var(--text-muted); cursor: pointer;
+  font-size: 12px; padding: 2px 4px; line-height: 1;
+}
+.code-collapse-btn:hover { color: var(--text-primary); }
+.message pre.collapsed > code { display: none; }
+.message pre.collapsed .code-block-header { border-bottom: none; }
 
 /* Markdown content styles */
 .msg-content h1, .msg-content h2, .msg-content h3, .msg-content h4 {
@@ -790,6 +824,26 @@ html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Sego
 .msg-content img { max-width: 100%; border-radius: 6px; margin: 8px 0; }
 .msg-content strong { color: var(--text-primary); }
 .msg-content em { color: var(--text-secondary); }
+
+/* Streaming message */
+.message.streaming .msg-role { display: flex; align-items: center; gap: 8px; }
+.streaming-stop-btn {
+  background: var(--red); color: #fff; border: none; border-radius: 4px;
+  padding: 1px 8px; font-size: 11px; cursor: pointer; opacity: 0.85;
+}
+.streaming-stop-btn:hover { opacity: 1; }
+
+/* Message search results */
+.msg-search-item {
+  padding: 10px 16px; border-bottom: 1px solid var(--border); cursor: default;
+  transition: background 0.1s;
+}
+.msg-search-item:hover { background: var(--bg-hover); }
+.msg-search-meta { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.msg-search-role { font-size: 11px; font-weight: 600; padding: 1px 6px; border-radius: 3px; }
+.msg-search-role.user { color: var(--accent); }
+.msg-search-role.assistant { color: var(--green); }
+.msg-search-preview { font-size: 13px; color: var(--text-secondary); line-height: 1.5; word-break: break-word; }
 
 /* Artifacts modal */
 .modal.artifacts-modal { min-width: 500px; max-width: 600px; max-height: 70vh; display: flex; flex-direction: column; }
@@ -1119,6 +1173,7 @@ html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Sego
       <span class="chat-skill-badge" id="chatSkillBadge" onclick="changeChatSkill()" title="Change skill"></span>
       <span class="memory-badge" id="memoryBadge" onclick="showMemoryModal()" title="会話メモリ管理" style="display:none">🧠 Memory</span>
       <div class="header-actions">
+        <button class="header-btn" onclick="showMsgSearch()">🔍 Search</button>
         <button class="header-btn" onclick="showArtifacts()">📁 Artifacts</button>
         <button class="header-btn" onclick="syncToGithub()" id="syncBtn" title="Push to GitHub">🔄 Push</button>
         <button class="header-btn" onclick="pullFromGithub()" id="pullBtn" title="Pull from GitHub">📥 Pull</button>
@@ -1425,6 +1480,9 @@ html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Sego
 
     <div class="modal-actions">
       <span class="settings-saved" id="settingsSaved">✓ Saved</span>
+      <button class="btn-cancel" onclick="exportSettings()" title="設定をJSONファイルとしてエクスポート">📤 Export</button>
+      <button class="btn-cancel" onclick="document.getElementById('settingsImportInput').click()" title="設定をJSONファイルからインポート">📥 Import</button>
+      <input type="file" id="settingsImportInput" accept=".json" style="display:none" onchange="importSettings(event)">
       <button class="btn-cancel" onclick="closeModal('settingsModal')">Cancel</button>
       <button class="btn-primary" onclick="saveSettings()">Save</button>
     </div>
@@ -1458,6 +1516,7 @@ html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Sego
       <span class="av-badge" id="avBadge"></span>
       <div class="av-actions">
         <button class="av-btn" id="avRawBtn" onclick="avToggleRaw()">Raw</button>
+        <button class="av-btn" id="avCopyBtn" onclick="avCopyContent()" title="内容をコピー">📋 Copy</button>
         <button class="av-btn" onclick="avZoom(-10)" title="Zoom out">－</button>
         <span class="av-zoom-label" id="avZoomLabel">100%</span>
         <button class="av-btn" onclick="avZoom(10)" title="Zoom in">＋</button>
@@ -1466,6 +1525,22 @@ html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Sego
       </div>
     </div>
     <div class="av-body" id="avBody"></div>
+  </div>
+</div>
+
+<!-- ===== Message Search Modal ===== -->
+<div class="modal-overlay" id="msgSearchModal" onclick="if(event.target===this)closeModal('msgSearchModal')">
+  <div class="modal" style="width:600px; max-width:95vw; max-height:80vh; display:flex; flex-direction:column; padding:0; overflow:hidden;">
+    <div class="modal-header" style="padding:12px 16px; flex-shrink:0;">
+      <h3>🔍 メッセージ検索</h3>
+      <button class="modal-close" onclick="closeModal('msgSearchModal')" title="Close">✕</button>
+    </div>
+    <div style="padding:10px 16px; border-bottom:1px solid var(--border); flex-shrink:0;">
+      <input id="msgSearchInput" type="text" placeholder="検索キーワードを入力..." class="input-field"
+        style="width:100%; box-sizing:border-box;"
+        oninput="onMsgSearchInput(this.value)" />
+    </div>
+    <div id="msgSearchResults" style="flex:1; overflow-y:auto; padding:8px 0;"></div>
   </div>
 </div>
 
@@ -1505,6 +1580,10 @@ function connectWs() {
       for (const task of data.tasks) {
         if (task.status === 'running' && task.experimentId === currentExpId && !activeTasks[task.id]) {
           activeTasks[task.id] = { streamBuffer: task.streamingText || '' };
+          // Re-render any in-progress streaming text after reload
+          if (task.streamingText) {
+            updateStreamingMessage(task.streamingText, task.id);
+          }
         }
       }
       renderTasksBar();
@@ -1610,20 +1689,23 @@ function renderExperimentList() {
 
   list.innerHTML = filtered.map((e, idx) => {
     const date = new Date(e.updated_at).toLocaleDateString('ja-JP', { month: 'short', day: 'numeric' });
-    const statusClass = e.status === 'archived' ? 'archived' : e.status === 'completed' ? 'completed' : '';
+    const isArchived = e.status === 'archived';
+    const statusClass = isArchived ? 'archived' : e.status === 'completed' ? 'completed' : '';
     const isPinned = e.pinned;
     const prevPinned = idx > 0 && filtered[idx - 1].pinned;
     const separator = !isPinned && prevPinned ? '<div class="pinned-separator"></div>' : '';
-    return `${separator}<div class="experiment-item ${e.id === currentExpId ? 'active' : ''} ${isPinned ? 'pinned' : ''}"
+    return `${separator}<div class="experiment-item ${e.id === currentExpId ? 'active' : ''} ${isPinned ? 'pinned' : ''} ${isArchived ? 'archived' : ''}"
                 onclick="selectExperiment('${e.id}')">
       <div class="exp-name">${esc(e.name)}</div>
       <div class="exp-meta">
         <span class="exp-status ${statusClass}"></span>
+        ${isArchived ? '<span title="アーカイブ済み" style="font-size:11px;color:var(--text-muted)">📦</span>' : ''}
         ${e.sync_repo ? '<span title="' + esc(e.sync_repo) + '">🔗</span>' : ''}
         <span>${date}</span>
       </div>
       <div class="exp-actions">
         <button class="exp-action-btn ${isPinned ? 'pinned' : ''}" onclick="togglePin('${e.id}', ${isPinned ? 0 : 1}, event)" title="${isPinned ? 'Unpin' : 'Pin'}">${isPinned ? '📌' : '📍'}</button>
+        <button class="exp-action-btn" onclick="toggleArchive('${e.id}', ${isArchived ? 0 : 1}, event)" title="${isArchived ? 'アーカイブ解除' : 'アーカイブ'}">${isArchived ? '📂' : '📦'}</button>
         <button class="exp-action-btn" onclick="showSidebarRename('${e.id}', event)" title="Rename">✏️</button>
         <button class="exp-action-btn" onclick="showSidebarDelete('${e.id}', event)" title="Delete">🗑</button>
       </div>
@@ -1725,6 +1807,11 @@ async function selectExperiment(id) {
   const area = document.getElementById('messagesArea');
   area.innerHTML = '';
   for (const msg of data.messages) {
+    // Skip streaming-incomplete messages — they'll be restored via list_tasks
+    try {
+      const meta = msg.metadata ? JSON.parse(msg.metadata) : {};
+      if (meta.streaming) continue;
+    } catch { /* ignore */ }
     appendMessage(msg);
   }
   scrollToBottom();
@@ -1849,6 +1936,16 @@ async function togglePin(expId, pinned, event) {
   await loadExperiments();
 }
 
+// Archive/unarchive a chat group
+async function toggleArchive(expId, archive, event) {
+  event.stopPropagation();
+  await api(`/experiments/${expId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ status: archive ? 'archived' : 'active' }),
+  });
+  await loadExperiments();
+}
+
 // Sidebar context menu: rename/delete from experiment list
 function showSidebarRename(expId, event) {
   event.stopPropagation();
@@ -1911,6 +2008,59 @@ async function pullFromGithub() {
     btn.textContent = origText;
     btn.disabled = false;
   }
+}
+
+// ===== Message Search =====
+let msgSearchTimer = null;
+
+function showMsgSearch() {
+  if (!currentExpId) return;
+  document.getElementById('msgSearchInput').value = '';
+  document.getElementById('msgSearchResults').innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:24px;font-size:13px;">キーワードを入力してください</div>';
+  document.getElementById('msgSearchModal').classList.add('visible');
+  setTimeout(() => document.getElementById('msgSearchInput').focus(), 50);
+}
+
+function onMsgSearchInput(value) {
+  clearTimeout(msgSearchTimer);
+  const q = value.trim();
+  if (!q) {
+    document.getElementById('msgSearchResults').innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:24px;font-size:13px;">キーワードを入力してください</div>';
+    return;
+  }
+  msgSearchTimer = setTimeout(async () => {
+    const container = document.getElementById('msgSearchResults');
+    container.innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:16px;font-size:13px;">検索中...</div>';
+    try {
+      const data = await api(`/experiments/${currentExpId}/messages/search?q=${encodeURIComponent(q)}`);
+      if (!data.messages || data.messages.length === 0) {
+        container.innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:24px;font-size:13px;">一致するメッセージはありません</div>';
+        return;
+      }
+      const qLow = q.toLowerCase();
+      container.innerHTML = data.messages.map(msg => {
+        const role = msg.role === 'user' ? 'You' : 'CoreClaw';
+        const time = new Date(msg.timestamp).toLocaleString('ja-JP');
+        // Highlight matching text (safe — esc() used)
+        let preview = msg.content.slice(0, 300);
+        const idx = preview.toLowerCase().indexOf(qLow);
+        if (idx >= 0) {
+          const before = esc(preview.slice(0, idx));
+          const match = esc(preview.slice(idx, idx + q.length));
+          const after = esc(preview.slice(idx + q.length, 300));
+          preview = `${before}<mark style="background:var(--accent);color:#fff;border-radius:2px;padding:0 2px">${match}</mark>${after}`;
+        } else {
+          preview = esc(preview);
+        }
+        return `<div class="msg-search-item" onclick="closeModal('msgSearchModal')">
+          <div class="msg-search-meta"><span class="msg-search-role ${msg.role}">${esc(role)}</span><span style="font-size:11px;color:var(--text-muted)">${time}</span></div>
+          <div class="msg-search-preview">${preview}${msg.content.length > 300 ? '…' : ''}</div>
+        </div>`;
+      }).join('');
+    } catch {
+      container.innerHTML = '<div style="text-align:center;color:var(--red);padding:16px;font-size:13px;">検索エラー</div>';
+    }
+  }, 300);
 }
 
 async function showArtifacts() {
@@ -2178,7 +2328,19 @@ function avDownload() {
   if (avCurrentUrl && avCurrentName) downloadArtifact(avCurrentUrl, avCurrentName);
 }
 
-// ===== Messages =====
+function avCopyContent() {
+  const text = avRawText;
+  if (!text) return;
+  const btn = document.getElementById('avCopyBtn');
+  navigator.clipboard.writeText(text).then(() => {
+    btn.textContent = '✅ Copied!';
+    setTimeout(() => { btn.textContent = '📋 Copy'; }, 2000);
+  }).catch(() => {
+    btn.textContent = '❌ Error';
+    setTimeout(() => { btn.textContent = '📋 Copy'; }, 2000);
+  });
+}
+
 function appendMessage(msg) {
   const area = document.getElementById('messagesArea');
   const div = document.createElement('div');
@@ -2202,8 +2364,8 @@ function updateStreamingMessage(text, taskId) {
     const area = document.getElementById('messagesArea');
     el = document.createElement('div');
     el.id = elId;
-    el.className = 'message assistant';
-    el.innerHTML = `<div class="msg-role">CoreClaw</div><div class="msg-content"></div>`;
+    el.className = 'message assistant streaming';
+    el.innerHTML = `<div class="msg-role">CoreClaw <button class="streaming-stop-btn" onclick="stopTask('${taskId || ''}')">⏹ Stop</button></div><div class="msg-content"></div>`;
     area.appendChild(el);
   }
   el.querySelector('.msg-content').innerHTML = renderMarkdown(text);
@@ -2646,10 +2808,45 @@ function renderMarkdown(text) {
   try {
     let html = marked.parse(text);
     html = linkifyArtifacts(html);
+    html = injectCodeBlockHeaders(html);
     return html;
   } catch {
     return esc(text).replace(/\n/g, '<br>');
   }
+}
+
+/**
+ * Post-process rendered HTML: wrap each <pre><code ...> block with a header
+ * that shows the language and a copy button.
+ */
+function injectCodeBlockHeaders(html) {
+  return html.replace(/<pre><code(?: class="language-([^"]*)")?>/g, (match, lang) => {
+    const langLabel = lang || 'code';
+    const collapseLines = 30; // auto-collapse if code is very long (applied in JS after render)
+    return `<pre data-lang="${esc(langLabel)}"><div class="code-block-header"><span class="code-block-lang">${esc(langLabel)}</span><span class="code-block-actions"><button class="code-collapse-btn" onclick="toggleCodeCollapse(this)" title="折りたたむ">▼</button><button class="code-copy-btn" onclick="copyCodeBlock(this)">Copy</button></span></div><code class="${lang ? `language-${lang}` : ''}">`;
+  }).replace(/<\/code><\/pre>/g, '</code></pre>');
+}
+
+function copyCodeBlock(btn) {
+  const pre = btn.closest('pre');
+  const code = pre ? pre.querySelector('code') : null;
+  if (!code) return;
+  navigator.clipboard.writeText(code.innerText).then(() => {
+    btn.textContent = 'Copied!';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+  }).catch(() => {
+    btn.textContent = 'Error';
+    setTimeout(() => { btn.textContent = 'Copy'; }, 2000);
+  });
+}
+
+function toggleCodeCollapse(btn) {
+  const pre = btn.closest('pre');
+  if (!pre) return;
+  const collapsed = pre.classList.toggle('collapsed');
+  btn.textContent = collapsed ? '▶' : '▼';
+  btn.title = collapsed ? '展開する' : '折りたたむ';
 }
 
 function esc(s) {
@@ -3423,7 +3620,43 @@ async function saveSettings() {
   closeModal('settingsModal');
 }
 
-// ===== Memory Management =====
+async function exportSettings() {
+  try {
+    const settings = await api('/settings');
+    // Omit sensitive tokens from export filename hint
+    const blob = new Blob([JSON.stringify(settings, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'coreclaw-settings.json';
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    alert('設定のエクスポートに失敗しました: ' + (e.message || e));
+  }
+}
+
+async function importSettings(event) {
+  const file = event.target.files[0];
+  event.target.value = '';
+  if (!file) return;
+  try {
+    const text = await file.text();
+    const imported = JSON.parse(text);
+    if (typeof imported !== 'object' || Array.isArray(imported)) {
+      alert('無効な設定ファイルです。');
+      return;
+    }
+    if (!confirm('設定をインポートしますか？現在の設定を上書きします。')) return;
+    await api('/settings', { method: 'PUT', body: JSON.stringify(imported) });
+    closeModal('settingsModal');
+    await showSettings();
+    alert('設定をインポートしました。');
+  } catch (e) {
+    alert('インポートに失敗しました: ' + (e.message || e));
+  }
+}
+
 
 function updateMemoryBadge() {
   const badge = document.getElementById('memoryBadge');
@@ -3433,14 +3666,17 @@ function updateMemoryBadge() {
   badge.classList.remove('has-summary', 'summarizing');
   if (!currentMemory) {
     badge.textContent = '🧠 Memory';
+    badge.title = '会話メモリ管理';
     return;
   }
   const count = currentMemory.summarized_count || 0;
   if (count > 0) {
     badge.classList.add('has-summary');
-    badge.textContent = `🧠 Memory (${count}件圧縮済)`;
+    badge.textContent = `🧠 ${count}件圧縮済`;
+    badge.title = `会話メモリ管理 — ${count}件が要約済み`;
   } else {
     badge.textContent = '🧠 Memory';
+    badge.title = '会話メモリ管理';
   }
 }
 
@@ -3462,11 +3698,23 @@ async function refreshMemoryModal() {
     const total = r.total_messages;
     const summarized = memory.summarized_count || 0;
     const unsummarized = total - summarized;
+    const threshold = 20; // MEMORY_RECENT_PAIRS * 2 = 10, trigger > 12
+    const nextCompressIn = Math.max(0, threshold - unsummarized + 1);
+    const progressPct = Math.min(100, Math.round((unsummarized / threshold) * 100));
     let html = `<div style="display:grid; grid-template-columns:1fr 1fr; gap:8px 16px; margin-bottom:12px;">
       <div><span style="color:var(--text-muted)">総メッセージ数:</span> <strong>${total}</strong></div>
       <div><span style="color:var(--text-muted)">圧縮済み:</span> <strong>${summarized}</strong></div>
       <div><span style="color:var(--text-muted)">未圧縮:</span> <strong>${unsummarized}</strong></div>
       <div><span style="color:var(--text-muted)">最終更新:</span> <strong>${memory.updated_at ? new Date(memory.updated_at).toLocaleString('ja-JP') : '—'}</strong></div>
+    </div>
+    <div style="margin-bottom:12px;">
+      <div style="display:flex; justify-content:space-between; font-size:11px; color:var(--text-muted); margin-bottom:4px;">
+        <span>次の自動圧縮まで: あと <strong style="color:var(--text-primary)">${nextCompressIn <= 0 ? '間もなく' : nextCompressIn + '件'}</strong></span>
+        <span>${unsummarized}/${threshold}</span>
+      </div>
+      <div style="height:5px; background:var(--bg-tertiary); border-radius:3px; overflow:hidden;">
+        <div style="height:100%; width:${progressPct}%; background:${progressPct >= 80 ? 'var(--orange)' : 'var(--accent)'}; border-radius:3px; transition:width 0.3s;"></div>
+      </div>
     </div>`;
     if (r.is_summarizing) {
       html += `<div style="color:var(--orange); margin-bottom:12px;">⏳ 要約処理中...</div>`;
@@ -3520,7 +3768,45 @@ document.addEventListener('click', function(e) {
   }
 });
 
-async function init() {
+// Mermaid code block in chat → click to open in artifact viewer popup
+document.addEventListener('click', function(e) {
+  const pre = e.target.closest('.msg-content pre[data-lang="mermaid"]');
+  if (pre) {
+    const code = pre.querySelector('code');
+    if (code) {
+      const text = code.innerText;
+      // Open a temporary popup without a file path — render inline
+      openMermaidPopup(text);
+    }
+  }
+});
+
+let avMermaidPopupRawText = '';
+
+function openMermaidPopup(text) {
+  avMermaidPopupRawText = text;
+  const modal = document.getElementById('artifactViewerModal');
+  const filenameEl = document.getElementById('avFilename');
+  const badgeEl = document.getElementById('avBadge');
+  const rawBtn = document.getElementById('avRawBtn');
+  const copyBtn = document.getElementById('avCopyBtn');
+  filenameEl.textContent = 'Mermaid Diagram';
+  badgeEl.textContent = 'Mermaid';
+  badgeEl.className = 'av-badge mermaid';
+  rawBtn.textContent = 'Raw';
+  rawBtn.style.display = '';
+  if (copyBtn) { copyBtn.style.display = ''; }
+  avZoomLevel = 100; avApplyZoom();
+  avRawText = text;
+  avCurrentFilepath = '';
+  avCurrentUrl = '';
+  avCurrentName = 'diagram.mmd';
+  avIsRaw = false;
+  modal.classList.add('visible');
+  avRenderMermaid(text);
+}
+
+
   if (typeof mermaid !== 'undefined') {
     mermaid.initialize({
       startOnLoad: false,
