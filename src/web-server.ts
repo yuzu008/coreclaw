@@ -395,6 +395,7 @@ interface ActiveTask {
   finishedAt?: string;
   streamingMsgId?: string;  // DB message ID for in-progress response
   streamingText: string;    // accumulated chunk text
+  finalMessage?: { id: string; experiment_id: string; role: string; content: string; timestamp: string };  // saved when done, for replay on reconnect
 }
 
 const activeTasks = new Map<string, ActiveTask>();
@@ -1300,6 +1301,7 @@ function handleWsMessage(ws: WebSocket, raw: string): void {
             const assistantMsg = task.streamingMsgId
               ? { id: task.streamingMsgId, experiment_id: data.experimentId, role: 'assistant' as const, content: fullResponse, timestamp: new Date().toISOString() }
               : addMessage(data.experimentId, 'assistant', fullResponse);
+            task.finalMessage = assistantMsg;
             broadcastToExperiment(data.experimentId, {
               type: 'agent_done',
               taskId,
@@ -1373,6 +1375,21 @@ function handleWsMessage(ws: WebSocket, raw: string): void {
     // Subscribe to an experiment (client switched to this group)
     if (data.type === 'subscribe' && data.experimentId) {
       clientSubscriptions.set(ws, data.experimentId as string);
+      // Replay any recently-completed tasks that this client may have missed
+      // (e.g. WebSocket was disconnected while the agent was running)
+      for (const task of activeTasks.values()) {
+        if (task.experimentId !== data.experimentId) continue;
+        if (task.status === 'done' && task.finalMessage) {
+          ws.send(JSON.stringify({
+            experimentId: task.experimentId,
+            type: 'agent_done',
+            taskId: task.id,
+            message: task.finalMessage,
+          }));
+        } else if (task.status === 'error') {
+          // error tasks don't need replay as they already have a system message in DB
+        }
+      }
     }
 
     // List active tasks

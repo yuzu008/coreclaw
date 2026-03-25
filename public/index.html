@@ -1585,6 +1585,16 @@ function connectWs() {
             updateStreamingMessage(task.streamingText, task.id);
           }
         }
+        // Replay completed tasks that were missed while disconnected
+        if (task.status === 'done' && task.finalMessage && task.experimentId === currentExpId) {
+          const alreadyShown = document.querySelector(`[data-msg-id="${task.finalMessage.id}"]`);
+          if (!alreadyShown) {
+            removeStreamingMessage(task.id);
+            delete activeTasks[task.id];
+            appendMessage(task.finalMessage);
+            scrollToBottom();
+          }
+        }
       }
       renderTasksBar();
       return;
@@ -1614,8 +1624,14 @@ function connectWs() {
         }
         // Refresh artifact cache (agent may have created files)
         refreshArtifactCache();
-        appendMessage(data.message);
-        scrollToBottom();
+        if (data.message) {
+          // Avoid duplicate if message was already rendered (e.g. via page load or replay)
+          const alreadyShown = data.message.id && document.querySelector(`[data-msg-id="${data.message.id}"]`);
+          if (!alreadyShown) {
+            appendMessage(data.message);
+            scrollToBottom();
+          }
+        }
         break;
       case 'agent_error':
         if (data.taskId) {
@@ -2345,6 +2361,7 @@ function appendMessage(msg) {
   const area = document.getElementById('messagesArea');
   const div = document.createElement('div');
   div.className = `message ${msg.role}`;
+  if (msg.id) div.dataset.msgId = msg.id;
   const time = new Date(msg.timestamp).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
   const roleLabel = msg.role === 'user' ? (msg.user_id || 'You') : msg.role === 'assistant' ? 'CoreClaw' : 'System';
 

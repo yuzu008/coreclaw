@@ -6,6 +6,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.1.30] - 2026-03-25
+
+### Fixed
+
+- **Background agent `agent_done` notification not delivered after WebSocket reconnect** — When a long-running background agent completed while the browser's WebSocket connection was temporarily disconnected, the `agent_done` event was broadcast only once and lost. Fixed by two complementary changes:
+  1. **Server**: Stores the completed message as `finalMessage` on the `ActiveTask` record. When a client re-subscribes to an experiment (via `subscribe` event — sent on WebSocket reconnect and when switching experiments), the server immediately replays `agent_done` for any recently-completed tasks that have a `finalMessage`.
+  2. **Client**: The `tasks` response handler now also checks for `status === 'done'` tasks with a `finalMessage` and renders them if not already shown. A `data-msg-id` attribute is set on all rendered message elements so duplicate detection works correctly.
+
+---
+
 ## [0.1.29] - 2026-03-25
 
 ### Changed
