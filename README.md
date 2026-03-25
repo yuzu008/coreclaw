@@ -203,6 +203,7 @@ See [CHANGELOG.md](CHANGELOG.md) for the full version history.
 
 | Version | Date | Summary |
 |---------|------|---------|
+| **v0.1.26** | 2026-03-25 | `setup.sh`: set `CONTAINER_TIMEOUT=3600000` (1 hour) in generated `.env` |
 | **v0.1.25** | 2026-03-25 | Fix: Japanese characters shown as □ in generated PNG images (matplotlib font override in scientist skills) |
 | **v0.1.24** | 2026-03-25 | Add `start.sh` (launches server with default ports `3000`/`3051`) |
 | **v0.1.23** | 2026-03-25 | Fix: missing `init()` declaration, zoom button direction, chat output invisible; add `setup.sh` |

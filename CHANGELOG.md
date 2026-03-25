@@ -6,6 +6,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.1.26] - 2026-03-25
+
+### Changed
+
+- **`setup.sh` — set `CONTAINER_TIMEOUT=3600000` in `.env`** — Added `CONTAINER_TIMEOUT=3600000` (1 hour) to the generated `.env` to prevent container timeout errors on long-running tasks. Also excluded the commented `# CONTAINER_TIMEOUT` line from `.env.example` during copy to avoid duplicate entries.
+
+---
+
 ## [0.1.25] - 2026-03-25
 
 ### Fixed
