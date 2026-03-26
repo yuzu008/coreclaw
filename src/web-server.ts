@@ -48,7 +48,8 @@ import {
   listMarketplaceSkillGroups,
 } from './skills-sync.js';
 import { syncExperiment, pullExperiment } from './github-sync.js';
-import { execSync, spawn } from 'child_process';
+import { execSync, spawn, spawnSync } from 'child_process';
+import { classifyUpdaterDirtyFiles, parseDirtyTrackedFiles } from './update-utils.js';
 import { createDeflateRaw, inflateRawSync } from 'zlib';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -1666,6 +1667,33 @@ async function updateComponent(component: string): Promise<{ ok: boolean; messag
         if (local === remote) {
           return { ok: true, message: `CoreClaw v${RUNNING_VERSION} is already up to date`, version: RUNNING_VERSION };
         }
+
+        const statusOutput = execSync('git status --porcelain', { cwd: projectRoot, encoding: 'utf-8', timeout: 5000 });
+        const dirtyFiles = parseDirtyTrackedFiles(statusOutput);
+        const { autoClean, blocking } = classifyUpdaterDirtyFiles(dirtyFiles);
+
+        if (blocking.length) {
+          return {
+            ok: false,
+            message: `Update blocked by local changes: ${blocking.join(', ')}. Commit, stash, or discard them first.`,
+          };
+        }
+
+        for (const file of autoClean) {
+          const restore = spawnSync('git', ['restore', '--source=HEAD', '--staged', '--worktree', '--', file], {
+            cwd: projectRoot,
+            encoding: 'utf-8',
+            timeout: 5000,
+          });
+          if (restore.status !== 0) {
+            throw new Error((restore.stderr || restore.stdout || `Failed to clean ${file}`).trim());
+          }
+        }
+
+        if (autoClean.length) {
+          logger.info({ files: autoClean }, 'Cleaned auto-generated local files before CoreClaw update');
+        }
+
         execSync('git pull origin main 2>&1', { cwd: projectRoot, encoding: 'utf-8', timeout: 60000, env: { ...process.env, ...gitEnv } });
         execSync('npm install 2>&1', { cwd: projectRoot, encoding: 'utf-8', timeout: 120000 });
         execSync('npm run build 2>&1', { cwd: projectRoot, encoding: 'utf-8', timeout: 120000 });
