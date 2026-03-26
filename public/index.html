@@ -3415,7 +3415,7 @@ function switchSettingsTab(tabName) {
   document.getElementById('settingsTab-' + tabName).classList.add('active');
   if (tabName === 'skills') {
     loadSkillList();
-    loadMarketplaceSkillList();
+    loadMarketplaceSkillList(true);
   }
 }
 
@@ -3616,7 +3616,7 @@ async function deleteSkill(name) {
     }
     delete skillScanResults[name];
     delete skillScanDetails[name];
-    await loadSkillList();
+    await Promise.all([loadSkillList(), loadMarketplaceSkillList(true)]);
   } catch (e) { alert('Error deleting skill'); }
 }
 

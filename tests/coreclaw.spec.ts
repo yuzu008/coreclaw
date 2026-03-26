@@ -352,6 +352,41 @@ test.describe('Settings', () => {
     await expect(marketplace.locator('button:has-text("Import")')).toBeVisible();
   });
 
+  test('reopens Skills tab with fresh marketplace data', async ({ page }) => {
+    let marketplaceCalls = 0;
+    await page.route('**/api/skills/marketplace', async (route) => {
+      marketplaceCalls += 1;
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([
+          {
+            slug: 'general-assistant',
+            name: 'General Assistant',
+            description: marketplaceCalls === 1 ? 'First state' : 'Refreshed state',
+            icon: '🤖',
+            count: 1,
+            installed: marketplaceCalls === 1,
+          },
+        ]),
+      });
+    });
+
+    await page.goto('/');
+    await page.click('.settings-btn');
+    await page.click('button:has-text("Skills")');
+
+    const marketplace = page.locator('#marketplaceSkillList');
+    await expect(marketplace).toContainText('First state');
+    await expect(marketplace).toContainText('Installed');
+
+    await page.click('button:has-text("Updates")');
+    await page.click('button:has-text("Skills")');
+
+    await expect(marketplace).toContainText('Refreshed state');
+    await expect(marketplace.locator('.marketplace-installed')).toHaveCount(0);
+  });
+
   test('MCP servers persist via settings save/reload', async ({ page }) => {
     await page.goto('/');
     await page.click('.settings-btn');
