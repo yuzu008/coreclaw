@@ -6,6 +6,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.1.35] - 2026-03-27
+
+### Added
+
+- **Skills Marketplace import**: Added Settings → Skills Marketplace listing/import support for official skill packs from `nahisaho/coreclaw-marketplace`.
+- **Marketplace metadata support**: Added marketplace group metadata for bundled skills and repackaged consultant skill bundles for Marketplace compatibility.
+
+### Fixed
+
+- **CoreClaw self-update failure**: The Settings → Updates flow now auto-cleans `package-lock.json` before `git pull` and blocks with a clear message when other tracked local changes would make the update unsafe.
+
 ## [0.1.34] - 2026-03-27
 
 ### Changed
