@@ -407,7 +407,8 @@ Settings > MCP Servers タブに「+ ToolUniverse」「+ Deep Research」ボタ�
 ToolUniverse:
   Type: stdio
   Command: uvx
-  Args: tooluniverse-smcp-stdio --compact-mode
+  Args: tooluniverse
+  Env: PYTHONIOENCODING=utf-8
 
 Deep Research:
   Type: stdio

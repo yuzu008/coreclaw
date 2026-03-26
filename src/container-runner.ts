@@ -64,6 +64,43 @@ interface VolumeMount {
   readonly: boolean;
 }
 
+interface McpServerConfig {
+  name: string;
+  type: string;
+  command: string;
+  args?: string;
+  env?: string;
+}
+
+function normalizeMcpServer(server: McpServerConfig): McpServerConfig {
+  if (
+    server.name !== 'ToolUniverse'
+    || server.type !== 'stdio'
+    || server.command !== 'uvx'
+    || !server.args
+    || !/^tooluniverse-smcp-stdio(?:\s|$)/.test(server.args.trim())
+  ) {
+    return server;
+  }
+
+  const envEntries = new Map<string, string>();
+  for (const pair of (server.env || '').split(',').map((part) => part.trim()).filter(Boolean)) {
+    const eq = pair.indexOf('=');
+    if (eq > 0) {
+      envEntries.set(pair.slice(0, eq), pair.slice(eq + 1));
+    }
+  }
+  if (!envEntries.has('PYTHONIOENCODING')) {
+    envEntries.set('PYTHONIOENCODING', 'utf-8');
+  }
+
+  return {
+    ...server,
+    args: 'tooluniverse',
+    env: Array.from(envEntries.entries()).map(([key, value]) => `${key}=${value}`).join(','),
+  };
+}
+
 function buildVolumeMounts(
   group: RegisteredGroup,
   isMain: boolean,
@@ -243,7 +280,7 @@ function buildContainerArgs(
         args.push('-e', `COPILOT_GITHUB_MCP_TOOLS=${mcpTools}`);
       }
       // Pass custom MCP servers config to container
-      let mcpList: Array<{name: string; type: string; command: string; args?: string; env?: string}> = [];
+      let mcpList: McpServerConfig[] = [];
       if (settings.mcp_servers) {
         try {
           mcpList = typeof settings.mcp_servers === 'string'
@@ -251,7 +288,7 @@ function buildContainerArgs(
             : settings.mcp_servers;
         } catch { /* ignore parse errors */ }
       }
-      const validMcp = mcpList.filter((s: {name: string; command: string}) => s.name && s.command);
+      const validMcp = mcpList.map(normalizeMcpServer).filter((s: McpServerConfig) => s.name && s.command);
       // Apply per-chat MCP filter (if set, only include servers in the filter list)
       const filteredMcp = mcpFilter ? validMcp.filter(s => mcpFilter.includes(s.name)) : validMcp;
       if (filteredMcp.length > 0) {

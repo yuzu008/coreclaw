@@ -128,7 +128,7 @@ function waitForIpcMessage(): Promise<string | null> {
 
 /**
  * Run Copilot CLI with a prompt and capture its output.
- * Uses `copilot -p` for non-interactive mode with JSON output.
+ * Uses `copilot -p` for non-interactive mode with JSONL streaming output.
  */
 async function runCopilotQuery(
   prompt: string,
@@ -137,7 +137,8 @@ async function runCopilotQuery(
   return new Promise((resolve, reject) => {
     const args: string[] = [
       '-p', prompt,
-      '--output-format', 'text',
+      '--output-format', 'json',
+      '--stream', 'on',
       '--allow-all',
     ];
 
@@ -190,9 +191,121 @@ async function runCopilotQuery(
 
     let stdout = '';
     let stderr = '';
+    let jsonBuffer = '';
+    let accumulatedAssistantText = '';
+    let finalAssistantMessage = '';
+
+    // Track last reported step to avoid duplicate status messages
+    let lastReportedStep = '';
+
+    const emitStatus = (message: string) => {
+      if (!message || message === lastReportedStep) return;
+      lastReportedStep = message;
+      log(message);
+    };
+
+    const parseJsonEvent = (line: string) => {
+      let event: any;
+      try {
+        event = JSON.parse(line);
+      } catch {
+        return false;
+      }
+
+      const eventType = event?.type;
+      const data = event?.data || {};
+
+      switch (eventType) {
+        case 'session.mcp_server_status_changed':
+          if (data.serverName && data.status) {
+            emitStatus(`MCP ${data.serverName}: ${data.status}`);
+          }
+          return true;
+        case 'session.mcp_servers_loaded':
+          if (Array.isArray(data.servers) && data.servers.length > 0) {
+            const names = data.servers.map((server: any) => server.name).filter(Boolean).join(', ');
+            emitStatus(`MCP servers loaded: ${names}`);
+          }
+          return true;
+        case 'session.tools_updated':
+          if (data.model) {
+            emitStatus(`Model selected: ${data.model}`);
+          }
+          return true;
+        case 'assistant.turn_start':
+          emitStatus('Copilot is analyzing the task');
+          return true;
+        case 'assistant.message':
+          if (typeof data.content === 'string' && data.content.trim()) {
+            finalAssistantMessage = data.content.trim();
+          }
+          return true;
+        case 'assistant.message_delta':
+          if (typeof data.deltaContent === 'string' && data.deltaContent) {
+            accumulatedAssistantText += data.deltaContent;
+          }
+          return true;
+        case 'tool.execution_start': {
+          const toolName = data.toolName || 'tool';
+          const argsSummary = data.arguments?.description || data.arguments?.intent || data.arguments?.command || data.arguments?.query;
+          emitStatus(argsSummary ? `Calling ${toolName}: ${argsSummary}` : `Calling ${toolName}`);
+          return true;
+        }
+        case 'tool.execution_complete': {
+          const toolName = data.toolName || data.result?.toolName || 'tool';
+          const success = data.success !== false;
+          emitStatus(success ? `Completed ${toolName}` : `Failed ${toolName}`);
+          return true;
+        }
+        case 'result': {
+          const usage = event?.usage || {};
+          const apiMs = usage.totalApiDurationMs;
+          const sessionMs = usage.sessionDurationMs;
+          const codeChanges = usage.codeChanges;
+          if (typeof usage.premiumRequests !== 'undefined') {
+            log(`Total usage est: ${usage.premiumRequests} Premium request${usage.premiumRequests === 1 ? '' : 's'}`);
+          }
+          if (typeof apiMs === 'number') {
+            log(`API time spent: ${Math.round(apiMs / 1000)}s`);
+          }
+          if (typeof sessionMs === 'number') {
+            log(`Total session time: ${Math.round(sessionMs / 1000)}s`);
+          }
+          if (codeChanges && typeof codeChanges.linesAdded === 'number' && typeof codeChanges.linesRemoved === 'number') {
+            log(`Total code changes: +${codeChanges.linesAdded} -${codeChanges.linesRemoved}`);
+          }
+          return true;
+        }
+        default:
+          return true;
+      }
+    };
 
     copilot.stdout.on('data', (data) => {
-      stdout += data.toString();
+      const chunk = data.toString();
+      stdout += chunk;
+      jsonBuffer += chunk;
+
+      let newlineIdx: number;
+      while ((newlineIdx = jsonBuffer.indexOf('\n')) !== -1) {
+        const rawLine = jsonBuffer.slice(0, newlineIdx);
+        jsonBuffer = jsonBuffer.slice(newlineIdx + 1);
+        const line = rawLine.trim();
+        if (!line) continue;
+        if (parseJsonEvent(line)) continue;
+
+        const stepMatch = line.match(/^#{1,3}\s+(?:Step\s+)?(\d+)(?:[\/:]|\s+of\s+)(\d+)?[:\s]\s*(.+)/i)
+          || line.match(/^\*\*(?:Step\s+)?(\d+)(?:[\/:]|\s+of\s+)(\d+)?[:\s]\s*(.+?)\*\*/i);
+        if (stepMatch) {
+          emitStatus(`Step ${stepMatch[1]}${stepMatch[2] ? '/' + stepMatch[2] : ''}: ${stepMatch[3]}`);
+          continue;
+        }
+
+        const toolMatch = line.match(/(?:calling|using|querying|searching|downloading|fetching|accessing)\s+[`*]*([A-Za-z][\w.-]+(?:_[\w]+)*)[`*]*/i);
+        if (toolMatch && toolMatch[1].length > 3) {
+          emitStatus(line.length > 120 ? line.slice(0, 117) + '...' : line);
+        }
+      }
     });
 
     copilot.stderr.on('data', (data) => {
@@ -205,8 +318,12 @@ async function runCopilotQuery(
     });
 
     copilot.on('close', (code) => {
+      const trailing = jsonBuffer.trim();
+      if (trailing) {
+        parseJsonEvent(trailing);
+      }
       resolve({
-        output: stdout.trim(),
+        output: finalAssistantMessage || accumulatedAssistantText.trim() || stdout.trim(),
         exitCode: code ?? 1,
       });
     });

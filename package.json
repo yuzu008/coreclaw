@@ -12,7 +12,14 @@
     "format": "prettier --write \"src/**/*.ts\"",
     "format:check": "prettier --check \"src/**/*.ts\"",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:playwright:page-load": "playwright test tests/coreclaw.spec.ts -g \"Page Load\"",
+    "test:playwright:sidebar-toggle": "playwright test tests/coreclaw.spec.ts -g \"Sidebar Toggle\"",
+    "test:playwright:experiment-management": "playwright test tests/coreclaw.spec.ts -g \"Experiment Management\"",
+    "test:playwright:chat-flow": "playwright test tests/coreclaw.spec.ts -g \"Chat Flow\"",
+    "test:playwright:settings": "playwright test tests/coreclaw.spec.ts -g \"Settings\" --grep-invert \"REST API\"",
+    "test:playwright:api": "playwright test tests/coreclaw.spec.ts -g \"REST API\"",
+    "test:playwright:progress-ui": "playwright test tests/coreclaw.spec.ts -g \"Progress UI\""
   },
   "dependencies": {
     "better-sqlite3": "^11.8.1",

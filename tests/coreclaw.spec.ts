@@ -166,6 +166,12 @@ test.describe('Experiment Management', () => {
 // ============================================================
 
 test.describe('Settings', () => {
+  async function clearMcpServers(page) {
+    while (await page.locator('.mcp-server-card').count() > 0) {
+      await page.locator('.mcp-server-card').first().locator('.mcp-remove').click();
+    }
+  }
+
   test('open and close settings modal', async ({ page }) => {
     await page.goto('/');
 
@@ -227,6 +233,7 @@ test.describe('Settings', () => {
 
     // Switch to MCP Servers tab
     await page.click('button:has-text("MCP Servers")');
+    await clearMcpServers(page);
     await page.click('.btn-add-mcp');
     // MCP server card should appear
     await expect(page.locator('.mcp-server-card')).toHaveCount(1);
@@ -236,6 +243,7 @@ test.describe('Settings', () => {
     await page.goto('/');
     await page.click('.settings-btn');
     await page.click('button:has-text("MCP Servers")');
+    await clearMcpServers(page);
 
     // Add two servers
     await page.click('.btn-add-mcp');
@@ -251,6 +259,7 @@ test.describe('Settings', () => {
     await page.goto('/');
     await page.click('.settings-btn');
     await page.click('button:has-text("MCP Servers")');
+    await clearMcpServers(page);
 
     await page.click('button:has-text("ToolUniverse")');
     await expect(page.locator('.mcp-server-card')).toHaveCount(1);
@@ -259,13 +268,15 @@ test.describe('Settings', () => {
     const card = page.locator('.mcp-server-card').first();
     await expect(card.locator('input.mcp-name')).toHaveValue('ToolUniverse');
     await expect(card.locator('input[placeholder*="Command"]')).toHaveValue('uvx');
-    await expect(card.locator('input[placeholder*="Args"]')).toHaveValue('tooluniverse-smcp-stdio --compact-mode');
+    await expect(card.locator('input[placeholder*="Args"]')).toHaveValue('tooluniverse');
+    await expect(card.locator('input[placeholder*="KEY=VAL"]')).toHaveValue('PYTHONIOENCODING=utf-8');
   });
 
   test('add Deep Research preset', async ({ page }) => {
     await page.goto('/');
     await page.click('.settings-btn');
     await page.click('button:has-text("MCP Servers")');
+    await clearMcpServers(page);
 
     await page.click('button:has-text("Deep Research")');
     await expect(page.locator('.mcp-server-card')).toHaveCount(1);
@@ -281,6 +292,7 @@ test.describe('Settings', () => {
     await page.goto('/');
     await page.click('.settings-btn');
     await page.click('button:has-text("MCP Servers")');
+    await clearMcpServers(page);
 
     await page.click('.btn-add-mcp');
     const card = page.locator('.mcp-server-card').first();
@@ -301,6 +313,7 @@ test.describe('Settings', () => {
     await page.goto('/');
     await page.click('.settings-btn');
     await page.click('button:has-text("MCP Servers")');
+    await clearMcpServers(page);
 
     // Add a ToolUniverse preset
     await page.click('button:has-text("ToolUniverse")');
@@ -345,9 +358,7 @@ test.describe('Settings', () => {
     await page.click('button:has-text("MCP Servers")');
 
     // Remove any existing servers first
-    while (await page.locator('.mcp-server-card').count() > 0) {
-      await page.locator('.mcp-server-card').first().locator('.mcp-remove').click();
-    }
+    await clearMcpServers(page);
 
     await page.click('button:has-text("ToolUniverse")');
     await page.click('button:has-text("Deep Research")');
@@ -379,9 +390,7 @@ test.describe('Settings', () => {
     await page.click('button:has-text("MCP Servers")');
 
     // Remove any existing servers first
-    while (await page.locator('.mcp-server-card').count() > 0) {
-      await page.locator('.mcp-server-card').first().locator('.mcp-remove').click();
-    }
+    await clearMcpServers(page);
 
     await page.click('button:has-text("ToolUniverse")');
     await page.click('#settingsModal button:has-text("Save")');
@@ -434,13 +443,17 @@ test.describe('Settings', () => {
 // ============================================================
 
 test.describe('Chat Flow', () => {
+  async function createExperiment(page, name: string) {
+    await page.click('button:has-text("New Chat")');
+    await page.fill('#expNameInput', name);
+    await page.click('#newExpModal .btn-primary');
+    await expect(page.locator('#messagesArea')).toHaveClass(/visible/);
+  }
+
   test('send message via WebSocket and see user message appear', async ({ page }) => {
     await page.goto('/');
 
-    // Create experiment
-    await page.click('button:has-text("New Chat")');
-    await page.fill('#expNameInput', 'Chat Test');
-    await page.click('#newExpModal .btn-primary');
+    await createExperiment(page, 'Chat Test');
     await expect(page.locator('#inputArea')).toHaveClass(/visible/);
 
     // Wait for WebSocket to connect
@@ -453,6 +466,264 @@ test.describe('Chat Flow', () => {
     // User message should appear in chat
     await expect(page.locator('.message.user').first()).toBeVisible();
     await expect(page.locator('.message.user .msg-content').first()).toContainText('Hello from Playwright');
+  });
+
+  test.describe('Progress UI', () => {
+    test('agent status panel shows human-friendly progress text', async ({ page }) => {
+      await page.goto('/');
+
+      await createExperiment(page, 'Status Panel Test');
+
+      const taskId = 'status-test';
+      const samples = [
+        ['MCP ToolUniverse: connected', '🧩 ToolUniverse に接続しました'],
+        ['MCP github-mcp-server: connected', '🧩 GitHub に接続しました'],
+        ['Model selected: claude-sonnet-4.6', '🧠 モデルを選択しました: claude-sonnet-4.6'],
+        ['Calling report_intent: Searching literature tools', '🧭 文献検索の進め方を整理中'],
+        ['Calling ToolUniverse-find_tools: OpenAlex literature search academic papers', '🔎 OpenAlex で学術論文を検索中'],
+        ['Calling ToolUniverse-execute_tool', '📚 文献データベースを検索中...'],
+        ['Completed tool', '✅ ツール実行が完了しました'],
+        ['Completed ToolUniverse-execute_tool', '✅ 文献検索 が完了しました'],
+      ] as const;
+
+      await page.evaluate(([id]) => {
+        window.showStatusPanel(id);
+      }, [taskId]);
+
+      for (const [raw, expected] of samples) {
+        const stepText = await page.evaluate(([id, line]) => {
+          window.updateStatusPanelLine(id, line);
+          return document.getElementById('asp-step-' + id)?.textContent || '';
+        }, [taskId, raw]);
+        expect(stepText).toBe(expected);
+      }
+
+      await expect(page.locator('#asp-tools-' + taskId)).toContainText('ツール選定');
+      await expect(page.locator('#asp-tools-' + taskId)).toContainText('文献検索');
+    });
+
+    test('streaming status shows step badge and progress bar', async ({ page }) => {
+      await page.goto('/');
+
+      await createExperiment(page, 'Streaming Status Test');
+
+      const taskId = 'stream-test';
+      const streamingText = [
+        '## Step 2/5: Search literature sources',
+        'Using `OpenAlex_search_papers` to collect candidate papers',
+        '',
+        'Gathering abstracts and citation counts.'
+      ].join('\n');
+
+      const result = await page.evaluate(([id, text]) => {
+        window.updateStreamingMessage(text, id);
+        const stepEl = document.getElementById('asp-step-' + id);
+        const fillEl = document.getElementById('asp-fill-' + id);
+        const toolsEl = document.getElementById('asp-tools-' + id);
+        return {
+          stepText: stepEl?.textContent || '',
+          stepHtml: stepEl?.innerHTML || '',
+          fillWidth: fillEl?.style.width || '',
+          isIndeterminate: fillEl?.classList.contains('indeterminate') || false,
+          toolsText: toolsEl?.textContent || '',
+        };
+      }, [taskId, streamingText]);
+
+      expect(result.stepText).toContain('Step 2/5');
+      expect(result.stepText).toContain('Search literature sources');
+      expect(result.stepHtml).toContain('asp-step-badge');
+      expect(result.fillWidth).toBe('40%');
+      expect(result.isIndeterminate).toBe(false);
+      expect(result.toolsText).toContain('OpenAlex_search_papers');
+    });
+
+    test('streaming status marks the latest tool chip as active', async ({ page }) => {
+      await page.goto('/');
+
+      await createExperiment(page, 'Streaming Tool Chip Test');
+
+      const taskId = 'stream-tool-chip-test';
+      const streamingText = [
+        'Step 3 of 4: Compare evidence and gather metadata',
+        'Using `OpenAlex_search_papers` to find candidate studies',
+        'Using `Crossref_lookup` to enrich citation metadata',
+      ].join('\n');
+
+      await page.evaluate(([id, text]) => {
+        window.updateStreamingMessage(text, id);
+      }, [taskId, streamingText]);
+
+      const chips = page.locator('#asp-tools-' + taskId + ' .asp-tool-chip');
+      await expect(chips).toHaveCount(4);
+      await expect(chips.nth(0)).toContainText('OpenAlex_search_papers');
+      await expect(chips.nth(2)).toContainText('Crossref_lookup');
+      await expect(chips.nth(2)).not.toHaveClass(/active/);
+      await expect(chips.nth(3)).toContainText('Crossref');
+      await expect(chips.nth(3)).toHaveClass(/active/);
+    });
+
+    test('websocket event sequence updates progress panel and final message', async ({ page }) => {
+      await page.goto('/');
+
+      await createExperiment(page, 'WebSocket Status Sequence Test');
+
+      const experimentId = await page.evaluate(() => currentExpId);
+      const taskId = 'ws-sequence-task';
+      const assistantMessage = {
+        id: 'ws-sequence-msg',
+        experiment_id: experimentId,
+        role: 'assistant',
+        content: '最終的な論文要約メッセージです。',
+        timestamp: new Date().toISOString(),
+      };
+
+      await page.evaluate(([expId, id]) => {
+        const emit = (payload) => ws.onmessage({ data: JSON.stringify(payload) });
+
+        emit({ experimentId: expId, type: 'agent_start', taskId: id });
+        emit({ experimentId: expId, type: 'agent_status', taskId: id, status: 'Calling ToolUniverse-find_tools: OpenAlex literature search academic papers' });
+        emit({ experimentId: expId, type: 'agent_chunk', taskId: id, chunk: '## Step 1/3: Search literature\nUsing `OpenAlex_search_papers` to collect evidence\n' });
+      }, [experimentId, taskId]);
+
+      await expect(page.locator('#streaming-msg-' + taskId)).toBeVisible();
+      await expect(page.locator('#asp-step-' + taskId)).toContainText('Step 1/3');
+      await expect(page.locator('#asp-step-' + taskId)).toContainText('Search literature');
+      await expect(page.locator('#asp-tools-' + taskId)).toContainText('OpenAlex_search_papers');
+
+      await page.evaluate(([expId, id, message]) => {
+        const emit = (payload) => ws.onmessage({ data: JSON.stringify(payload) });
+        emit({ experimentId: expId, type: 'agent_status', taskId: id, status: 'Completed ToolUniverse-find_tools' });
+        emit({ experimentId: expId, type: 'agent_done', taskId: id, message });
+      }, [experimentId, taskId, assistantMessage]);
+
+      await expect(page.locator('#streaming-msg-' + taskId)).toHaveCount(0);
+      await expect(page.locator('.message.assistant').last()).toContainText('最終的な論文要約メッセージです。');
+
+      const allAssistantText = await page.locator('.message.assistant').last().textContent();
+      expect(allAssistantText).toContain('最終的な論文要約メッセージです。');
+    });
+
+    test('tasks event restores running task progress after reconnect', async ({ page }) => {
+      await page.goto('/');
+
+      await createExperiment(page, 'Task Restore Test');
+
+      const experimentId = await page.evaluate(() => currentExpId);
+      const taskId = 'restored-task';
+      const startedAt = new Date(Date.now() - 45_000).toISOString();
+      const prompt = 'CRISPR literature review for restore test';
+      const streamingText = [
+        '## Step 2/4: Compare candidate papers',
+        'Using `OpenAlex_search_papers` to gather abstracts',
+        'Using `Crossref_lookup` to enrich metadata',
+      ].join('\n');
+
+      await page.evaluate(([expId, id, started, taskPrompt, text]) => {
+        ws.onmessage({
+          data: JSON.stringify({
+            type: 'tasks',
+            tasks: [{
+              id,
+              experimentId: expId,
+              prompt: taskPrompt,
+              status: 'running',
+              startedAt: started,
+              streamingText: text,
+              _lastStatus: 'Calling ToolUniverse-find_tools: OpenAlex literature search academic papers',
+            }],
+          }),
+        });
+      }, [experimentId, taskId, startedAt, prompt, streamingText]);
+
+      await expect(page.locator('#streaming-msg-' + taskId)).toBeVisible();
+      await expect(page.locator('#tasksBar')).toHaveCount(0);
+      await expect(page.locator('#asp-step-' + taskId)).toContainText('Step 2/4');
+      await expect(page.locator('#asp-step-' + taskId)).toContainText('Compare candidate papers');
+      await expect(page.locator('#asp-tools-' + taskId)).toContainText('OpenAlex_search_papers');
+      await expect(page.locator('#asp-tools-' + taskId)).toContainText('Crossref_lookup');
+      await expect(page.locator('#asp-elapsed-' + taskId)).not.toHaveText('0s');
+    });
+
+    test('mock websocket sends subscribe and restores tasks payload', async ({ page }) => {
+      await page.addInitScript(() => {
+        class MockWebSocket {
+          static OPEN = 1;
+          static CLOSED = 3;
+
+          constructor(url) {
+            this.url = url;
+            this.readyState = MockWebSocket.OPEN;
+            this.sent = [];
+            this.onopen = null;
+            this.onmessage = null;
+            this.onerror = null;
+            this.onclose = null;
+            window.__mockSockets = window.__mockSockets || [];
+            window.__mockSockets.push(this);
+            setTimeout(() => {
+              if (this.onopen) this.onopen();
+            }, 0);
+          }
+
+          send(payload) {
+            this.sent.push(payload);
+          }
+
+          close() {
+            this.readyState = MockWebSocket.CLOSED;
+            if (this.onclose) this.onclose();
+          }
+
+          emitMessage(payload) {
+            if (this.onmessage) {
+              this.onmessage({ data: JSON.stringify(payload) });
+            }
+          }
+        }
+
+        window.__mockSockets = [];
+        window.WebSocket = MockWebSocket;
+      });
+
+      await page.goto('/');
+
+      await createExperiment(page, 'Mock WebSocket Test');
+
+      const state = await page.evaluate(() => {
+        const socket = window.__mockSockets[0];
+        return {
+          currentExpId,
+          sent: socket ? socket.sent.map((raw) => JSON.parse(raw)) : [],
+        };
+      });
+
+      expect(state.sent.some((msg) => msg.type === 'list_tasks')).toBe(true);
+      expect(state.sent.some((msg) => msg.type === 'subscribe' && msg.experimentId === state.currentExpId)).toBe(true);
+
+      const taskId = 'mock-restored-task';
+      const startedAt = new Date(Date.now() - 30_000).toISOString();
+
+      await page.evaluate(([expId, id, started]) => {
+        const socket = window.__mockSockets[0];
+        socket.emitMessage({
+          type: 'tasks',
+          tasks: [{
+            id,
+            experimentId: expId,
+            prompt: 'Mock websocket restore prompt',
+            status: 'running',
+            startedAt: started,
+            streamingText: '## Step 2/3: Review evidence\nUsing `OpenAlex_search_papers` to compare abstracts',
+            _lastStatus: 'Calling ToolUniverse-find_tools: OpenAlex literature search academic papers',
+          }],
+        });
+      }, [state.currentExpId, taskId, startedAt]);
+
+      await expect(page.locator('#tasksBar')).toHaveCount(0);
+      await expect(page.locator('#streaming-msg-' + taskId)).toBeVisible();
+      await expect(page.locator('#asp-step-' + taskId)).toContainText('Step 2/3');
+      await expect(page.locator('#asp-tools-' + taskId)).toContainText('OpenAlex_search_papers');
+    });
   });
 });
 

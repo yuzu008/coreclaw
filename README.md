@@ -60,6 +60,20 @@ npm run dev
 
 Open http://localhost:3000 in your browser (port is configurable via `CORECLAW_WEB_PORT`).
 
+## Playwright Test Shortcuts
+
+Run the app first, then use any of these focused Playwright commands:
+
+```bash
+npm run test:playwright:page-load
+npm run test:playwright:sidebar-toggle
+npm run test:playwright:experiment-management
+npm run test:playwright:chat-flow
+npm run test:playwright:progress-ui
+npm run test:playwright:settings
+npm run test:playwright:api
+```
+
 ## Architecture
 
 ```

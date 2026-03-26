@@ -484,14 +484,22 @@ async function main(): Promise<void> {
         assistantName: ASSISTANT_NAME,
       },
       (proc) => {
+        // Immediately notify client that the container process has spawned
+        if (onStatus) {
+          onStatus('__container_spawned__');
+        }
         // Stream container stderr as status updates to the client
         if (onStatus && proc.stderr) {
           proc.stderr.on('data', (data: Buffer) => {
             const lines = data.toString().trim().split('\n');
             for (const line of lines) {
               const trimmed = line.trim();
-              if (trimmed && trimmed.startsWith('[agent-runner]')) {
+              if (!trimmed) continue;
+              if (trimmed.startsWith('[agent-runner]')) {
                 onStatus(trimmed.replace(/^\[agent-runner\]\s*/, ''));
+              } else if (trimmed.length > 5 && !trimmed.startsWith('{')) {
+                // Forward non-JSON stderr lines (Docker messages, pull progress, etc.)
+                onStatus(trimmed);
               }
             }
           });

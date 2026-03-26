@@ -397,9 +397,28 @@ interface ActiveTask {
   streamingMsgId?: string;  // DB message ID for in-progress response
   streamingText: string;    // accumulated chunk text
   finalMessage?: { id: string; experiment_id: string; role: string; content: string; timestamp: string };  // saved when done, for replay on reconnect
+  _heartbeat?: ReturnType<typeof setInterval>;  // periodic heartbeat timer
+  _lastStatus?: string;  // last status line sent
+  _lastStatusAt?: number;  // timestamp of the last non-heartbeat status line
+  _heartbeatSent?: boolean;
 }
 
 const activeTasks = new Map<string, ActiveTask>();
+
+function serializeTask(task: ActiveTask): Record<string, unknown> {
+  return {
+    id: task.id,
+    experimentId: task.experimentId,
+    prompt: task.prompt,
+    status: task.status,
+    startedAt: task.startedAt,
+    finishedAt: task.finishedAt,
+    streamingMsgId: task.streamingMsgId,
+    streamingText: task.streamingText,
+    finalMessage: task.finalMessage,
+    _lastStatus: task._lastStatus,
+  };
+}
 
 function generateTaskId(): string {
   return `task-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
@@ -1219,7 +1238,7 @@ function broadcastToExperiment(experimentId: string, data: unknown): void {
 }
 
 function broadcastTasks(): void {
-  const tasks = Array.from(activeTasks.values());
+  const tasks = Array.from(activeTasks.values(), serializeTask);
   const msg = JSON.stringify({ type: 'tasks', tasks });
   for (const [ws] of clientSubscriptions) {
     if (ws.readyState === WebSocket.OPEN) {
@@ -1270,6 +1289,26 @@ function handleWsMessage(ws: WebSocket, raw: string): void {
       broadcastToExperiment(data.experimentId, { type: 'agent_start', taskId });
       broadcastTasks();
 
+      // Start heartbeat: send periodic agent_status while agent is running.
+      // This ensures the client receives updates even after reconnect/reload.
+      const heartbeatExpId = data.experimentId;
+      task._heartbeat = setInterval(() => {
+        if (task.status !== 'running') {
+          clearInterval(task._heartbeat);
+          task._heartbeat = undefined;
+          return;
+        }
+        if (task._lastStatus || task._heartbeatSent) {
+          return;
+        }
+        task._heartbeatSent = true;
+        broadcastToExperiment(heartbeatExpId, {
+          type: 'agent_status',
+          taskId,
+          status: '__heartbeat__',
+        });
+      }, 3000);
+
       // Run agent (non-blocking — multiple can run in parallel)
       if (agentRunner) {
         agentRunner(
@@ -1293,6 +1332,7 @@ function handleWsMessage(ws: WebSocket, raw: string): void {
           },
           (fullResponse: string) => {
             if (task.status === 'cancelled') return;
+            if (task._heartbeat) { clearInterval(task._heartbeat); task._heartbeat = undefined; }
             task.status = 'done';
             task.finishedAt = new Date().toISOString();
             // Replace streaming message with final version
@@ -1322,6 +1362,7 @@ function handleWsMessage(ws: WebSocket, raw: string): void {
           },
           (error: string) => {
             if (task.status === 'cancelled') return;
+            if (task._heartbeat) { clearInterval(task._heartbeat); task._heartbeat = undefined; }
             task.status = 'error';
             task.finishedAt = new Date().toISOString();
             const errMsg = addMessage(data.experimentId, 'system', `Error: ${error}`);
@@ -1336,6 +1377,11 @@ function handleWsMessage(ws: WebSocket, raw: string): void {
           },
           (statusLine: string) => {
             if (task.status === 'cancelled') return;
+            const now = Date.now();
+            if (task._lastStatus === statusLine) return;
+            if (task._lastStatusAt && now - task._lastStatusAt < 2000 && statusLine === 'Copilot is analyzing the task') return;
+            task._lastStatus = statusLine;
+            task._lastStatusAt = now;
             broadcastToExperiment(data.experimentId, {
               type: 'agent_status',
               taskId,
@@ -1365,6 +1411,7 @@ function handleWsMessage(ws: WebSocket, raw: string): void {
     if (data.type === 'stop' && data.taskId) {
       const task = activeTasks.get(data.taskId);
       if (task && task.status === 'running') {
+        if (task._heartbeat) { clearInterval(task._heartbeat); task._heartbeat = undefined; }
         task.status = 'cancelled';
         task.finishedAt = new Date().toISOString();
         if (agentStopper) {
@@ -1403,7 +1450,7 @@ function handleWsMessage(ws: WebSocket, raw: string): void {
 
     // List active tasks
     if (data.type === 'list_tasks') {
-      const tasks = Array.from(activeTasks.values());
+      const tasks = Array.from(activeTasks.values(), serializeTask);
       ws.send(JSON.stringify({ type: 'tasks', tasks }));
     }
   } catch (err) {

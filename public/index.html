@@ -715,28 +715,6 @@ html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Sego
   position: absolute; bottom: 4px; right: 10px;
 }
 
-/* Active tasks bar */
-.tasks-bar { padding: 0 20px; }
-.task-chip {
-  display: inline-flex; align-items: center; gap: 6px;
-  background: var(--bg-tertiary); border: 1px solid var(--border);
-  border-radius: 16px; padding: 4px 12px; margin: 4px 4px 4px 0;
-  font-size: 12px; color: var(--text-secondary); animation: fadeIn .2s;
-}
-.task-chip.running { border-color: var(--accent); color: var(--accent); }
-.task-chip.done { border-color: var(--green); color: var(--green); }
-.task-chip.error { border-color: var(--red); color: var(--red); }
-.task-chip.cancelled { border-color: var(--text-muted); color: var(--text-muted); text-decoration: line-through; }
-.task-chip .task-pulse {
-  width: 6px; height: 6px; border-radius: 50%; background: var(--accent);
-  animation: pulse 1.4s infinite ease-in-out;
-}
-.task-chip .task-stop {
-  background: none; border: none; color: inherit; cursor: pointer;
-  font-size: 14px; padding: 0 2px; opacity: 0.7; transition: opacity .15s;
-}
-.task-chip .task-stop:hover { opacity: 1; }
-@keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 .dot-pulse { display: flex; gap: 4px; }
 .dot-pulse span {
   width: 6px; height: 6px; background: var(--accent); border-radius: 50%;
@@ -1288,9 +1266,6 @@ html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Sego
     <!-- Messages -->
     <div class="messages" id="messagesArea"></div>
 
-    <!-- Active tasks bar -->
-    <div class="tasks-bar" id="tasksBar"></div>
-
     <!-- Input -->
     <div class="input-area" id="inputArea">
       <div class="upload-preview" id="uploadPreview"></div>
@@ -1648,6 +1623,93 @@ let ws = null;
 let activeTasks = {};       // taskId -> { streamBuffer }
 let activeTaskList = [];    // full task list from server
 let currentMemory = null;   // current memory state for the active experiment
+let pendingTaskContexts = [];
+
+function getCurrentExperiment() {
+  return currentExpId ? experiments.find(e => e.id === currentExpId) : null;
+}
+
+function buildTaskContext(promptText) {
+  const exp = getCurrentExperiment();
+  const skill = (exp?.skill || '').trim();
+  const prompt = (promptText || '').trim();
+  const haystack = (skill + '\n' + prompt).toLowerCase();
+  const isResearch = /scientist|research|paper|literature|pubmed|openalex|semantic scholar|crossref|arxiv|論文|文献|査読|研究/.test(haystack);
+  const isCode = /code|bug|fix|test|typescript|javascript|python|react|api|コード|修正|テスト|実装/.test(haystack);
+
+  if (isResearch) {
+    return {
+      stages: [
+        '🔎 論文・参考文献を検索中...',
+        '📚 文献メタデータを収集中...',
+        '⬇ 関連資料を取得中...',
+        '🧪 エビデンスを整理・比較中...',
+        '📝 レポートを組み立て中...',
+      ],
+    };
+  }
+
+  if (isCode) {
+    return {
+      stages: [
+        '🔍 コードベースを確認中...',
+        '🛠 修正方針を整理中...',
+        '🧪 変更内容を検証中...',
+        '📝 結果をまとめ中...',
+      ],
+    };
+  }
+
+  return {
+    stages: [
+      '🔍 情報を収集中...',
+      '🧭 方針を整理中...',
+      '⚙ 必要な処理を実行中...',
+      '📝 回答をまとめ中...',
+    ],
+  };
+}
+
+function hasDetailedStatusLine(line) {
+  if (!line || line === '__heartbeat__' || line === '__container_spawned__') return false;
+  return /^Step\s+\d+/i.test(line)
+    || /(?:calling|using|querying|searching|downloading|fetching|accessing)\s+/i.test(line)
+    || /PubMed|OpenAlex|SemanticScholar|Crossref|ArXiv|EuropePMC|ClinicalTrials|PMC|UniProt|KEGG/i.test(line);
+}
+
+function renderSyntheticStatus(taskId, text) {
+  const sid = taskId || 'default';
+  showStatusPanel(taskId);
+  const stepEl = document.getElementById('asp-step-' + sid);
+  if (stepEl) stepEl.textContent = text;
+}
+
+function stopSyntheticStatus(taskId) {
+  const task = activeTasks[taskId];
+  if (!task || !task.syntheticTimer) return;
+  clearInterval(task.syntheticTimer);
+  task.syntheticTimer = null;
+}
+
+function startSyntheticStatus(taskId) {
+  const task = activeTasks[taskId];
+  if (!task || task.syntheticTimer) return;
+
+  const stages = task.context?.stages || ['⏳ エージェント処理中...'];
+  task.syntheticIndex = 0;
+  task.syntheticTimer = setInterval(() => {
+    const current = activeTasks[taskId];
+    if (!current) return;
+    if (current.hasDetailedStatus) {
+      stopSyntheticStatus(taskId);
+      return;
+    }
+    if (current.syntheticIndex < stages.length) {
+      renderSyntheticStatus(taskId, stages[current.syntheticIndex]);
+      current.syntheticIndex += 1;
+    }
+  }, 7000);
+}
 
 // ===== WebSocket =====
 function connectWs() {
@@ -1675,8 +1737,34 @@ function connectWs() {
       // Restore activeTasks entries for running tasks in the current group
       for (const task of data.tasks) {
         if (task.status === 'running' && task.experimentId === currentExpId && !activeTasks[task.id]) {
-          activeTasks[task.id] = { streamBuffer: task.streamingText || '' };
-          showStatusPanel(task.id);
+          // Restore elapsed timer using server-side startedAt timestamp
+          const serverStart = task.startedAt ? new Date(task.startedAt).getTime() : Date.now();
+          const elapsedTimer = setInterval(() => {
+            const elEl = document.getElementById('asp-elapsed-' + task.id);
+            if (!elEl) { clearInterval(elapsedTimer); return; }
+            const s = Math.floor((Date.now() - serverStart) / 1000);
+            elEl.textContent = s < 60 ? s + 's' : Math.floor(s/60) + 'm ' + (s%60) + 's';
+          }, 1000);
+          activeTasks[task.id] = {
+            streamBuffer: task.streamingText || '',
+            elapsedTimer,
+            startedAt: serverStart,
+            context: buildTaskContext(task.prompt || ''),
+            hasDetailedStatus: false,
+            syntheticTimer: null,
+            syntheticIndex: 0,
+          };
+          showStatusPanel(task.id, '⏳ エージェント処理中...');
+          startSyntheticStatus(task.id);
+          if (task._lastStatus) {
+            updateStatusPanelLine(task.id, task._lastStatus);
+          }
+          // Immediately show correct elapsed time (don't wait 1s for first tick)
+          const elEl = document.getElementById('asp-elapsed-' + task.id);
+          if (elEl) {
+            const s = Math.floor((Date.now() - serverStart) / 1000);
+            elEl.textContent = s < 60 ? s + 's' : Math.floor(s/60) + 'm ' + (s%60) + 's';
+          }
           // Re-render any in-progress streaming text after reload
           if (task.streamingText) {
             updateStreamingMessage(task.streamingText, task.id);
@@ -1693,7 +1781,6 @@ function connectWs() {
           }
         }
       }
-      renderTasksBar();
       return;
     }
 
@@ -1706,15 +1793,25 @@ function connectWs() {
       case 'agent_start':
         if (data.taskId) {
           const elapsed0 = Date.now();
+          const context = pendingTaskContexts.shift() || buildTaskContext('');
           const elapsedTimer = setInterval(() => {
             const elEl = document.getElementById('asp-elapsed-' + data.taskId);
             if (!elEl) { clearInterval(elapsedTimer); return; }
             const s = Math.floor((Date.now() - elapsed0) / 1000);
             elEl.textContent = s < 60 ? s + 's' : Math.floor(s/60) + 'm ' + (s%60) + 's';
           }, 1000);
-          activeTasks[data.taskId] = { streamBuffer: '', elapsedTimer, startedAt: Date.now() };
+          activeTasks[data.taskId] = {
+            streamBuffer: '',
+            elapsedTimer,
+            startedAt: Date.now(),
+            context,
+            hasDetailedStatus: false,
+            syntheticTimer: null,
+            syntheticIndex: 0,
+          };
           // Show the status panel immediately — don't wait for first chunk
           showStatusPanel(data.taskId);
+          startSyntheticStatus(data.taskId);
         }
         break;
       case 'agent_chunk':
@@ -1731,6 +1828,7 @@ function connectWs() {
       case 'agent_done':
         if (data.taskId) {
           if (activeTasks[data.taskId]?.elapsedTimer) clearInterval(activeTasks[data.taskId].elapsedTimer);
+          stopSyntheticStatus(data.taskId);
           removeStreamingMessage(data.taskId);
           delete activeTasks[data.taskId];
         }
@@ -1748,6 +1846,7 @@ function connectWs() {
       case 'agent_error':
         if (data.taskId) {
           if (activeTasks[data.taskId]?.elapsedTimer) clearInterval(activeTasks[data.taskId].elapsedTimer);
+          stopSyntheticStatus(data.taskId);
           removeStreamingMessage(data.taskId);
           delete activeTasks[data.taskId];
         }
@@ -1756,6 +1855,7 @@ function connectWs() {
       case 'agent_cancelled':
         if (data.taskId) {
           if (activeTasks[data.taskId]?.elapsedTimer) clearInterval(activeTasks[data.taskId].elapsedTimer);
+          stopSyntheticStatus(data.taskId);
           removeStreamingMessage(data.taskId);
           delete activeTasks[data.taskId];
         }
@@ -1769,23 +1869,6 @@ function connectWs() {
         break;
     }
   };
-}
-
-function renderTasksBar() {
-  const bar = document.getElementById('tasksBar');
-  if (!bar) return;
-  const currentTasks = activeTaskList.filter(t => t.experimentId === currentExpId && t.status === 'running');
-  if (currentTasks.length === 0) {
-    bar.innerHTML = '';
-    return;
-  }
-  bar.innerHTML = currentTasks.map(t =>
-    `<span class="task-chip running">
-      <span class="task-pulse"></span>
-      ${esc(t.prompt.slice(0, 40))}${t.prompt.length > 40 ? '…' : ''}
-      <button class="task-stop" onclick="stopTask('${t.id}')" title="Stop this task">⏹</button>
-    </span>`
-  ).join('');
 }
 
 function stopTask(taskId) {
@@ -1919,7 +2002,6 @@ async function selectExperiment(id) {
   document.getElementById('expTitle').textContent = exp.name;
   updateChatSkillBadge();
   renderExperimentList();
-  renderTasksBar();
 
   // Load memory state for this experiment
   currentMemory = null;
@@ -2513,16 +2595,129 @@ function showStatusPanel(taskId) {
   scrollToBottom();
 }
 
+function humanizeToolName(toolName) {
+  if (!toolName) return 'ツール';
+  const normalized = String(toolName).replace(/^ToolUniverse-/, '');
+  const labelMap = {
+    'tool': 'ツール実行',
+    'report_intent': '方針整理',
+    'find_tools': 'ツール選定',
+    'execute_tool': '文献検索',
+    'github-mcp-server': 'GitHub',
+    'ToolUniverse': 'ToolUniverse',
+  };
+  return labelMap[normalized] || normalized;
+}
+
+function humanizeStatusSummary(summary) {
+  if (!summary) return '';
+  let text = String(summary).trim();
+  if (!text) return '';
+  const replacements = [
+    [/^Searching literature tools$/i, '文献検索の進め方を整理中'],
+    [/^Finding literature search tools$/i, '利用できる文献検索手段を確認中'],
+    [/^Searching CRISPR base editing papers$/i, 'CRISPR base editing 関連論文を検索中'],
+    [/^OpenAlex literature search academic papers$/i, 'OpenAlex で学術論文を検索中'],
+    [/^academic literature search OpenAlex papers$/i, 'OpenAlex で学術論文を検索中'],
+  ];
+  for (const [pattern, replacement] of replacements) {
+    if (pattern.test(text)) return replacement;
+  }
+  return text;
+}
+
+function addStatusToolChip(taskId, toolName) {
+  const sid = taskId || 'default';
+  const toolsEl = document.getElementById('asp-tools-' + sid);
+  const label = humanizeToolName(toolName);
+  if (!toolsEl || !label || toolsEl.querySelector('[data-tool="' + label + '"]')) return;
+  const chip = document.createElement('span');
+  chip.className = 'asp-tool-chip';
+  chip.setAttribute('data-tool', label);
+  chip.textContent = '🔧 ' + label;
+  toolsEl.appendChild(chip);
+}
+
+function formatFriendlyStatus(line) {
+  let match = line.match(/^MCP\s+(.+?):\s+connected$/i);
+  if (match) {
+    return '🧩 ' + humanizeToolName(match[1]) + ' に接続しました';
+  }
+
+  match = line.match(/^Model selected:\s+(.+)$/i);
+  if (match) {
+    return '🧠 モデルを選択しました: ' + match[1];
+  }
+
+  match = line.match(/^Calling\s+report_intent(?::\s*(.+))?$/i);
+  if (match) {
+    const summary = humanizeStatusSummary(match[1]);
+    return summary ? '🧭 ' + summary : '🧭 方針を整理中...';
+  }
+
+  match = line.match(/^Calling\s+ToolUniverse-find_tools(?::\s*(.+))?$/i);
+  if (match) {
+    const summary = humanizeStatusSummary(match[1]);
+    return summary ? '🔎 ' + summary : '🔎 利用する検索ツールを選定中...';
+  }
+
+  match = line.match(/^Calling\s+ToolUniverse-execute_tool(?::\s*(.+))?$/i);
+  if (match) {
+    const summary = humanizeStatusSummary(match[1]);
+    return summary ? '📚 ' + summary : '📚 文献データベースを検索中...';
+  }
+
+  match = line.match(/^Calling\s+(.+?)(?::\s*(.+))?$/i);
+  if (match) {
+    const toolLabel = humanizeToolName(match[1]);
+    const summary = humanizeStatusSummary(match[2]);
+    return summary ? '🔧 ' + toolLabel + ' を実行中: ' + summary : '🔧 ' + toolLabel + ' を実行中...';
+  }
+
+  if (/^Completed tool$/i.test(line)) {
+    return '✅ ツール実行が完了しました';
+  }
+
+  match = line.match(/^Completed\s+(.+)$/i);
+  if (match) {
+    return '✅ ' + humanizeToolName(match[1]) + ' が完了しました';
+  }
+
+  return null;
+}
+
 // Update the status panel with a status line from the server (container stderr)
 function updateStatusPanelLine(taskId, line) {
   const sid = taskId || 'default';
   showStatusPanel(taskId); // ensure panel exists
   const stepEl = document.getElementById('asp-step-' + sid);
   if (!stepEl) return;
+  const task = activeTasks[taskId];
+  if (task && hasDetailedStatusLine(line)) {
+    task.hasDetailedStatus = true;
+    stopSyntheticStatus(taskId);
+  }
+
+  // Handle special server signals
+  if (line === '__container_spawned__') {
+    stepEl.textContent = '🐳 コンテナ起動中...';
+    return;
+  }
+  if (line === '__heartbeat__') {
+    // No real status received yet — show generic processing text
+    const cur = stepEl.textContent;
+    if (cur === 'エージェント起動中...' || cur === '🐳 コンテナ起動中...') {
+      stepEl.textContent = '⏳ エージェント処理中...';
+    }
+    return;
+  }
+
   // Map agent-runner log lines to user-friendly status
   const statusMap = [
+    [/MCP config loaded/i, '🧩 ツール設定を読み込み中...'],
     [/Starting query/i, '🔄 クエリ実行中...'],
     [/Running copilot/i, '🤖 Copilot 処理中...'],
+    [/Package extraction took/i, '📦 パッケージを展開中...'],
     [/API time spent:\s*(.+)/i, null], // dynamic
     [/Total usage est:\s*(.+)/i, null],
     [/Total session time:\s*(.+)/i, null],
@@ -2531,8 +2726,65 @@ function updateStatusPanelLine(taskId, line) {
     [/Close sentinel/i, '📤 出力を送信中...'],
     [/Received input/i, '📥 入力を受信、準備中...'],
     [/Breakdown by AI model/i, null],
+    [/Pulling\s/i, '📦 イメージ取得中...'],
+    [/Downloading/i, '📦 ダウンロード中...'],
   ];
+
+  // Check Step pattern first (from stdout parsing in agent-runner)
+  const stepMatch = line.match(/^Step\s+(\d+)(?:\/(\d+))?:\s*(.+)/i);
+  if (stepMatch) {
+    const stepNum = stepMatch[1];
+    const totalSteps = stepMatch[2] ? '/' + stepMatch[2] : '';
+    const stepDesc = stepMatch[3];
+    stepEl.textContent = '📋 Step ' + stepNum + totalSteps + ': ' + stepDesc;
+    // Also update the tools area if we can detect tool/db names
+    const toolsEl = document.getElementById('asp-tools-' + sid);
+    if (toolsEl) {
+      const knownDbs = ['PubMed','OpenAlex','EuropePMC','Crossref','ArXiv','bioRxiv','medRxiv',
+        'SemanticScholar','KEGG','UniProt','STRING','ChEMBL','DrugBank','CORE',
+        'Zenodo','OpenTargets','PubChem','FAERS','AlphaFold','ClinicalTrials'];
+      for (const db of knownDbs) {
+        if (stepDesc.includes(db) && !toolsEl.querySelector('[data-tool="' + db + '"]')) {
+          const chip = document.createElement('span');
+          chip.className = 'asp-tool-chip';
+          chip.setAttribute('data-tool', db);
+          chip.textContent = '🔧 ' + db;
+          toolsEl.appendChild(chip);
+        }
+      }
+    }
+    // Update progress bar if total steps known
+    if (stepMatch[2]) {
+      const fillEl = document.getElementById('asp-fill-' + sid);
+      if (fillEl) {
+        const pct = Math.min(100, Math.round((parseInt(stepNum) / parseInt(stepMatch[2])) * 100));
+        fillEl.style.width = pct + '%';
+        fillEl.classList.remove('indeterminate');
+      }
+    }
+    return;
+  }
+
   let display = line;
+  const friendlyStatus = formatFriendlyStatus(line);
+  if (friendlyStatus) {
+    const toolCallMatch = line.match(/^Calling\s+(.+?)(?::\s|$)/i);
+    if (toolCallMatch && !/^report_intent$/i.test(toolCallMatch[1])) {
+      addStatusToolChip(taskId, toolCallMatch[1]);
+    }
+    stepEl.textContent = friendlyStatus;
+    return;
+  }
+
+  // Detect tool/action lines from stdout parsing (e.g., "Calling PubMed_search", "downloading papers")
+  const actionMatch = line.match(/(?:calling|using|querying|searching|downloading|fetching|accessing)\s+[`*]*([A-Za-z][\w.-]+)/i);
+  if (actionMatch) {
+    const toolName = actionMatch[1];
+    display = '🔧 ' + line;
+    addStatusToolChip(taskId, toolName);
+    stepEl.textContent = display;
+    return;
+  }
   for (const [pattern, label] of statusMap) {
     const m = line.match(pattern);
     if (m) {
@@ -2699,6 +2951,8 @@ async function sendMessage() {
 
   const content = (text + fileInfo).trim();
   if (!content) return;
+
+  pendingTaskContexts.push(buildTaskContext(content));
 
   ws.send(JSON.stringify({
     type: 'chat',
@@ -3681,13 +3935,36 @@ function updateMcpField(el) {
   if (field === 'type') renderMcpServers();
 }
 
+function normalizeMcpServer(server) {
+  if (!server || server.name !== 'ToolUniverse' || server.type !== 'stdio' || server.command !== 'uvx') {
+    return server;
+  }
+  const args = (server.args || '').trim();
+  if (!/^tooluniverse-smcp-stdio(?:\s|$)/.test(args)) {
+    return server;
+  }
+
+  const envEntries = new Map();
+  String(server.env || '').split(',').map(part => part.trim()).filter(Boolean).forEach(pair => {
+    const eq = pair.indexOf('=');
+    if (eq > 0) envEntries.set(pair.slice(0, eq), pair.slice(eq + 1));
+  });
+  if (!envEntries.has('PYTHONIOENCODING')) envEntries.set('PYTHONIOENCODING', 'utf-8');
+
+  return {
+    ...server,
+    args: 'tooluniverse',
+    env: Array.from(envEntries.entries()).map(([key, value]) => `${key}=${value}`).join(','),
+  };
+}
+
 function addToolUniverse() {
   addMcpServerRow({
     name: 'ToolUniverse',
     type: 'stdio',
     command: 'uvx',
-    args: 'tooluniverse-smcp-stdio --compact-mode',
-    env: ''
+    args: 'tooluniverse',
+    env: 'PYTHONIOENCODING=utf-8'
   });
 }
 
@@ -3710,7 +3987,7 @@ async function populateMcpCheckboxes(containerId, selectedNames) {
     const settings = await api('/settings');
     if (settings.mcp_servers) {
       const list = typeof settings.mcp_servers === 'string' ? JSON.parse(settings.mcp_servers) : settings.mcp_servers;
-      servers = list.filter(s => s.name && s.command);
+      servers = list.map(normalizeMcpServer).filter(s => s.name && s.command);
     }
   } catch { /* ignore */ }
 
@@ -3845,6 +4122,7 @@ async function showSettings() {
     document.getElementById('settingsOllamaModel').value = settings.ollama_model || '';
     selectProvider(settings.ai_provider || 'openai');
     mcpServers = settings.mcp_servers ? (typeof settings.mcp_servers === 'string' ? JSON.parse(settings.mcp_servers) : settings.mcp_servers) : [];
+    mcpServers = mcpServers.map(normalizeMcpServer);
     renderMcpServers();
   } catch {
     selectProvider('openai');
