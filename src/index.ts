@@ -443,7 +443,7 @@ async function main(): Promise<void> {
   loadState();
 
   // Start web server (experiment UI)
-  setAgentRunner((experimentId, prompt, onChunk, onDone, onError) => {
+  setAgentRunner((experimentId, prompt, onChunk, onDone, onError, onStatus) => {
     const exp = getExperiment(experimentId);
     const groupFolder = `experiment-${experimentId}`;
     const tempGroup: RegisteredGroup = {
@@ -483,7 +483,20 @@ async function main(): Promise<void> {
         isMain: false,
         assistantName: ASSISTANT_NAME,
       },
-      () => {},
+      (proc) => {
+        // Stream container stderr as status updates to the client
+        if (onStatus && proc.stderr) {
+          proc.stderr.on('data', (data: Buffer) => {
+            const lines = data.toString().trim().split('\n');
+            for (const line of lines) {
+              const trimmed = line.trim();
+              if (trimmed && trimmed.startsWith('[agent-runner]')) {
+                onStatus(trimmed.replace(/^\[agent-runner\]\s*/, ''));
+              }
+            }
+          });
+        }
+      },
       async (output) => {
         if (output.result) {
           const text = output.result.replace(/<internal>[\s\S]*?<\/internal>/g, '').trim();

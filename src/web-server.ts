@@ -308,6 +308,7 @@ type AgentRunner = (
   onChunk: (chunk: string) => void,
   onDone: (fullResponse: string) => void,
   onError: (error: string) => void,
+  onStatus?: (statusLine: string) => void,
 ) => void;
 
 type AgentStopper = (experimentId: string, taskId: string) => void;
@@ -1332,6 +1333,14 @@ function handleWsMessage(ws: WebSocket, raw: string): void {
             });
             broadcastTasks();
             setTimeout(() => activeTasks.delete(taskId), 60000);
+          },
+          (statusLine: string) => {
+            if (task.status === 'cancelled') return;
+            broadcastToExperiment(data.experimentId, {
+              type: 'agent_status',
+              taskId,
+              status: statusLine,
+            });
           },
         );
       } else {

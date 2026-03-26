@@ -6,6 +6,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.1.32] - 2026-03-26
+
+### Fixed
+
+- **Agent Status Panel stuck at "エージェント起動中..."** — The container agent produces output only once at the end of execution (via `OUTPUT_START_MARKER`/`OUTPUT_END_MARKER`), so no `agent_chunk` events arrive during the 5–10 minute run. The status panel was stuck because it only updated on chunk arrival. Fixed by streaming the container's stderr (`[agent-runner]` log lines) to the client as `agent_status` WebSocket events in real-time:
+  - **Server**: `AgentRunner` now accepts an `onStatus` callback. In `src/index.ts`, the `onProcess` callback attaches to `proc.stderr` and forwards `[agent-runner]` lines via `onStatus()`. In `web-server.ts`, `onStatus` broadcasts `{ type: 'agent_status', taskId, status }`.
+  - **Client**: New `case 'agent_status'` in the WebSocket handler calls `updateStatusPanelLine(taskId, line)`. Status lines are mapped to user-friendly Japanese labels: `📥 入力を受信、準備中...` → `🔄 クエリ実行中...` → `🤖 Copilot 処理中...` → `✅ クエリ完了、結果を整理中...`.
+
+---
+
 ## [0.1.31] - 2026-03-26
 
 ### Added

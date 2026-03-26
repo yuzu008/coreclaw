@@ -1723,6 +1723,11 @@ function connectWs() {
           updateStreamingMessage(activeTasks[data.taskId].streamBuffer, data.taskId);
         }
         break;
+      case 'agent_status':
+        if (data.taskId) {
+          updateStatusPanelLine(data.taskId, data.status);
+        }
+        break;
       case 'agent_done':
         if (data.taskId) {
           if (activeTasks[data.taskId]?.elapsedTimer) clearInterval(activeTasks[data.taskId].elapsedTimer);
@@ -2506,6 +2511,40 @@ function showStatusPanel(taskId) {
     '<div class="msg-content"></div>';
   area.appendChild(el);
   scrollToBottom();
+}
+
+// Update the status panel with a status line from the server (container stderr)
+function updateStatusPanelLine(taskId, line) {
+  const sid = taskId || 'default';
+  showStatusPanel(taskId); // ensure panel exists
+  const stepEl = document.getElementById('asp-step-' + sid);
+  if (!stepEl) return;
+  // Map agent-runner log lines to user-friendly status
+  const statusMap = [
+    [/Starting query/i, '🔄 クエリ実行中...'],
+    [/Running copilot/i, '🤖 Copilot 処理中...'],
+    [/API time spent:\s*(.+)/i, null], // dynamic
+    [/Total usage est:\s*(.+)/i, null],
+    [/Total session time:\s*(.+)/i, null],
+    [/Total code changes:\s*(.+)/i, null],
+    [/Query ended/i, '✅ クエリ完了、結果を整理中...'],
+    [/Close sentinel/i, '📤 出力を送信中...'],
+    [/Received input/i, '📥 入力を受信、準備中...'],
+    [/Breakdown by AI model/i, null],
+  ];
+  let display = line;
+  for (const [pattern, label] of statusMap) {
+    const m = line.match(pattern);
+    if (m) {
+      if (label) {
+        display = label;
+      } else {
+        display = line;
+      }
+      break;
+    }
+  }
+  stepEl.textContent = display;
 }
 
 // Parse accumulated agent output text to extract step number, total steps, and tool names.
