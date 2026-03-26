@@ -6,6 +6,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.1.34] - 2026-03-27
+
+### Changed
+
+- **Progress UI simplified**: Removed the lower duplicate task-progress row so active runs are shown only in the main Agent Status Panel.
+- **Playwright workflow improved**: Added focused npm scripts for major Playwright groups and documented them in the README for faster targeted reruns.
+
+### Verified
+
+- **Long-running prompt coverage**: Mock WebSocket testing confirmed that long-running prompts complete correctly with progress restoration behavior intact.
+
 ## [0.1.33] - 2026-03-26
 
 ### Summary (v0.1.30–v0.1.32)
