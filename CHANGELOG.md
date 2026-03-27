@@ -12,6 +12,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **Skills Marketplace import**: Added Settings → Skills Marketplace listing/import support for official skill packs from `nahisaho/coreclaw-marketplace`.
 - **Marketplace metadata support**: Added marketplace group metadata for bundled skills and repackaged consultant skill bundles for Marketplace compatibility.
+- **Marketplace description popup**: Added an `info` button to Marketplace skill cards so each skill's description can be viewed in a popup before import.
 
 ### Fixed
 
