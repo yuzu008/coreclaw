@@ -1,0 +1,31 @@
+name: coreclaw
+locale: ja
+versioning: semver
+
+context:
+  domain: research-workbench
+  audience:
+    - university-researcher
+    - postdoc
+    - doctoral-student
+
+quality_gates:
+  - typecheck
+  - lint
+  - unit-test
+  - integration-test
+
+principles:
+  - reproducibility-first
+  - run-centric-management
+  - evidence-attached-generation
+  - auditability
+
+artifacts:
+  requirements_dir: storage/specs
+  design_dir: storage/design
+  traceability_dir: storage/traceability
+  review_dir: storage/reviews
+
+note: |
+  本プロジェクトでは、会話品質よりも再現可能な実験運用を優先する。

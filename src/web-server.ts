@@ -72,6 +72,16 @@ const SETTINGS_KEYS = [
   'mcp_servers',
 ] as const;
 
+const DEMO_STARTUP_NOTICE = [
+  'WSL上でCoreClawを起動し、gh認証済みトークンを.envに設定、Dockerコンテナで安全に実行できる状態まで構築済みです。',
+  'http://localhost:3000 で起動し、MCP（ToolUniverse / deep-research）設定と用途別チャットグループ（general / scientist / consultant / educationalist）まで初期化済みです。',
+  '',
+  '補足:',
+  '- 必須前提: Copilot利用権、gh auth login、Docker',
+  '- 起動コマンド: npm start',
+  '- セキュリティ注意: トークンは定期ローテーション',
+].join('\n');
+
 type SettingsMap = Record<string, string>;
 
 function sanitizeMcpServersValue(value: unknown): string {
@@ -596,6 +606,7 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
     const body = JSON.parse(await readBody(req));
     const settings = loadSettings();
     const exp = createExperiment(body.name || 'Untitled Experiment', body.description, settings.github_username || '', body.sync_repo || '', body.skill || '', body.mcp_servers || '');
+    addMessage(exp.id, 'system', DEMO_STARTUP_NOTICE);
     sendJson(res, 201, exp);
     return;
   }
