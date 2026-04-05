@@ -11,6 +11,8 @@
     "typecheck": "tsc --noEmit",
     "format": "prettier --write \"src/**/*.ts\"",
     "format:check": "prettier --check \"src/**/*.ts\"",
+    "init:presets": "node dist/init-presets.js",
+    "apply:presets": "node dist/apply-presets.js",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:playwright:page-load": "playwright test tests/coreclaw.spec.ts -g \"Page Load\"",

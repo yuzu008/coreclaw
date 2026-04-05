@@ -47,6 +47,10 @@ import {
   listAvailableSkills,
   listMarketplaceSkillGroups,
 } from './skills-sync.js';
+import {
+  listDomainPresets,
+  resolvePresetConfig,
+} from './domain-presets.js';
 import { syncExperiment, pullExperiment } from './github-sync.js';
 import { execSync, spawn, spawnSync } from 'child_process';
 import { classifyUpdaterDirtyFiles, parseDirtyTrackedFiles } from './update-utils.js';
@@ -593,6 +597,12 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
 
   // ---- API: Experiments ----
 
+  // GET /api/domain-presets
+  if (method === 'GET' && pathname === '/api/domain-presets') {
+    sendJson(res, 200, listDomainPresets());
+    return;
+  }
+
   // GET /api/experiments
   if (method === 'GET' && pathname === '/api/experiments') {
     const status = url.searchParams.get('status') || undefined;
@@ -605,8 +615,40 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
   if (method === 'POST' && pathname === '/api/experiments') {
     const body = JSON.parse(await readBody(req));
     const settings = loadSettings();
-    const exp = createExperiment(body.name || 'Untitled Experiment', body.description, settings.github_username || '', body.sync_repo || '', body.skill || '', body.mcp_servers || '');
+
+    // F-401 / DES-402: preset_id 指定時は領域プリセット既定値を優先して実験を初期化する。
+    const preset = body.preset_id
+      ? resolvePresetConfig(String(body.preset_id), String(body.name || '').trim())
+      : null;
+
+    if (body.preset_id && !preset) {
+      sendJson(res, 400, { error: 'Unknown preset_id' });
+      return;
+    }
+
+    const expName =
+      String(body.name || '').trim() || preset?.name || 'Untitled Experiment';
+    const expDescription =
+      String(body.description || '').trim() || preset?.description || '';
+    const expSkill =
+      String(body.skill || '').trim() || preset?.skill || '';
+    const expMcpServers =
+      String(body.mcp_servers || '').trim() || preset?.mcp_servers || '';
+    const expPresetId = String(body.preset_id || '').trim() || '';
+
+    const exp = createExperiment(
+      expName,
+      expDescription,
+      settings.github_username || '',
+      body.sync_repo || '',
+      expSkill,
+      expMcpServers,
+      expPresetId,
+    );
     addMessage(exp.id, 'system', DEMO_STARTUP_NOTICE);
+    if (preset?.presetSystemMessage) {
+      addMessage(exp.id, 'system', preset.presetSystemMessage);
+    }
     sendJson(res, 201, exp);
     return;
   }

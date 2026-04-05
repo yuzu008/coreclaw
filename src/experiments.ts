@@ -22,6 +22,7 @@ export interface Experiment {
   skill: string; // default skill name for this chat
   mcp_servers: string; // JSON array of enabled MCP server names (empty = all)
   pinned: number; // 1 = pinned to top of sidebar, 0 = normal
+  preset_id?: string; // domain preset ID (optional, set at creation)
 }
 
 export interface ExperimentMessage {
@@ -93,6 +94,9 @@ export function initExperimentsDb(database: Database.Database): void {
   if (!expCols.find(c => c.name === 'pinned')) {
     db.exec("ALTER TABLE experiments ADD COLUMN pinned INTEGER DEFAULT 0");
   }
+  if (!expCols.find(c => c.name === 'preset_id')) {
+    db.exec("ALTER TABLE experiments ADD COLUMN preset_id TEXT DEFAULT NULL");
+  }
   const msgCols = db.prepare("PRAGMA table_info('experiment_messages')").all() as { name: string }[];
   if (!msgCols.find(c => c.name === 'user_id')) {
     db.exec("ALTER TABLE experiment_messages ADD COLUMN user_id TEXT DEFAULT ''");
@@ -114,7 +118,7 @@ function experimentDir(id: string): string {
   return path.join(experimentsDir(), id);
 }
 
-export function createExperiment(name: string, description = '', createdBy = '', syncRepo = '', skill = '', mcpServers = ''): Experiment {
+export function createExperiment(name: string, description = '', createdBy = '', syncRepo = '', skill = '', mcpServers = '', presetId = ''): Experiment {
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
   const exp: Experiment = {
@@ -129,14 +133,15 @@ export function createExperiment(name: string, description = '', createdBy = '',
     skill,
     mcp_servers: mcpServers,
     pinned: 0,
+    preset_id: presetId || undefined,
   };
 
   getDb()
     .prepare(
-      `INSERT INTO experiments (id, name, description, status, created_at, updated_at, created_by, sync_repo, skill, mcp_servers, pinned)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO experiments (id, name, description, status, created_at, updated_at, created_by, sync_repo, skill, mcp_servers, pinned, preset_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
-    .run(exp.id, exp.name, exp.description, exp.status, exp.created_at, exp.updated_at, exp.created_by, exp.sync_repo, exp.skill, exp.mcp_servers, exp.pinned);
+    .run(exp.id, exp.name, exp.description, exp.status, exp.created_at, exp.updated_at, exp.created_by, exp.sync_repo, exp.skill, exp.mcp_servers, exp.pinned, presetId || null);
 
   // Create experiment artifacts directory
   const dir = experimentDir(id);
@@ -196,7 +201,7 @@ export function listExperiments(
 
 export function updateExperiment(
   id: string,
-  updates: Partial<Pick<Experiment, 'name' | 'description' | 'status' | 'sync_repo' | 'skill' | 'mcp_servers' | 'pinned'>>,
+  updates: Partial<Pick<Experiment, 'name' | 'description' | 'status' | 'sync_repo' | 'skill' | 'mcp_servers' | 'pinned' | 'preset_id'>>,
 ): Experiment | null {
   const exp = getExperiment(id);
   if (!exp) return null;
@@ -208,15 +213,16 @@ export function updateExperiment(
   const skill = updates.skill ?? exp.skill;
   const mcp_servers = updates.mcp_servers ?? exp.mcp_servers;
   const pinned = updates.pinned ?? exp.pinned;
+  const preset_id = updates.preset_id ?? exp.preset_id;
   const updated_at = new Date().toISOString();
 
   getDb()
     .prepare(
-      'UPDATE experiments SET name = ?, description = ?, status = ?, sync_repo = ?, skill = ?, mcp_servers = ?, pinned = ?, updated_at = ? WHERE id = ?',
+      'UPDATE experiments SET name = ?, description = ?, status = ?, sync_repo = ?, skill = ?, mcp_servers = ?, pinned = ?, preset_id = ?, updated_at = ? WHERE id = ?',
     )
-    .run(name, description, status, sync_repo, skill, mcp_servers, pinned, updated_at, id);
+    .run(name, description, status, sync_repo, skill, mcp_servers, pinned, preset_id || null, updated_at, id);
 
-  return { ...exp, name, description, status, sync_repo, skill, mcp_servers, pinned, updated_at };
+  return { ...exp, name, description, status, sync_repo, skill, mcp_servers, pinned, preset_id, updated_at };
 }
 
 export function deleteExperiment(id: string): boolean {
